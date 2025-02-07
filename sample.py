@@ -1,6 +1,6 @@
 import torch
 import torchaudio
-from src.model import Zonos
+from zonos.model import Zonos
 
 model = Zonos.from_pretrained("Zyphra/Zonos-v0.1-transformer", device="cuda")
 model.bfloat16().requires_grad_(False).eval()
@@ -8,7 +8,7 @@ model.bfloat16().requires_grad_(False).eval()
 spk_audio, spk_sr = torchaudio.load("./britishmale3.mp3")
 spk_embedding = model.embed_spk_audio(spk_audio, spk_sr)
 
-torch.manual_seed(420)
+torch.manual_seed(421)
 
 conditioning = model.prepare_conditioning({
     "espeak": (["It would be nice to have time for testing, indeed."], ["en-us"]),

@@ -7,13 +7,13 @@ from mamba_ssm.utils.generation import InferenceParams
 from safetensors.torch import load_model
 from tqdm import trange
 
-from src.autoencoder import DACAutoencoder
-from src.backbone import ZonosBackbone
-from src.codebook_pattern import apply_delay_pattern, revert_delay_pattern
-from src.conditioning import PrefixConditioner
-from src.config import ZonosConfig
-from src.sampling import sample_from_logits
-from src.speaker_cloning import SpeakerEmbeddingLDA
+from zonos.autoencoder import DACAutoencoder
+from zonos.backbone import ZonosBackbone
+from zonos.codebook_pattern import apply_delay_pattern, revert_delay_pattern
+from zonos.conditioning import PrefixConditioner
+from zonos.config import ZonosConfig
+from zonos.sampling import sample_from_logits
+from zonos.speaker_cloning import SpeakerEmbeddingLDA
 
 
 class Zonos(nn.Module):
@@ -127,6 +127,11 @@ class Zonos(nn.Module):
             ]
         )
     
+    def _disallow_cb_not_zero_eos(self, logits):
+        eos_bias = torch.zeros_like(logits)
+        eos_bias[:, 1:, self.eos_token_id] = -1e9
+        return logits + eos_bias
+
     def generate(
         self,
         prefix_conditioning: torch.Tensor,  # [bsz, cond_seq_len, d_model]
@@ -166,6 +171,7 @@ class Zonos(nn.Module):
         for offset in trange(offset + 1, delayed_codes.shape[2]):
             input_ids = delayed_codes[..., offset - 1 : offset]
             logits = self._decode_one_token(input_ids, inference_params, cfg_scale)
+            logits = self._disallow_cb_not_zero_eos(logits)
             next_token = sample_from_logits(logits, **sampling_params)
             if offset > 8 and (next_token == self.eos_token_id).any():
                 break

@@ -4,7 +4,7 @@ from typing import Any, Literal
 import torch
 import torch.nn as nn
 
-from src.config import PrefixConditionerConfig
+from zonos.config import PrefixConditionerConfig
 
 
 class Conditioner(nn.Module):
