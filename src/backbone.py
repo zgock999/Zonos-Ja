@@ -4,7 +4,7 @@ from mamba_ssm.models.mixer_seq_simple import create_block
 from mamba_ssm.ops.triton.layer_norm import layer_norm_fn
 from mamba_ssm.utils.generation import InferenceParams
 
-from zaudio.config import BackboneConfig
+from src.config import BackboneConfig
 
 
 class ZonosBackbone(nn.Module):

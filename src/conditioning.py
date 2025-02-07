@@ -4,7 +4,7 @@ from typing import Any, Literal
 import torch
 import torch.nn as nn
 
-from zaudio.config import PrefixConditionerConfig
+from src.config import PrefixConditionerConfig
 
 
 class Conditioner(nn.Module):

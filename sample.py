@@ -1,6 +1,6 @@
 import torch
 import torchaudio
-from zaudio.model import Zonos
+from src.model import Zonos
 
 model = Zonos.from_pretrained("Zyphra/Zonos-v0.1-transformer", device="cuda")
 model.bfloat16().requires_grad_(False).eval()
