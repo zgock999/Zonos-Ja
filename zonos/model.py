@@ -43,19 +43,21 @@ class Zonos(nn.Module):
         return cls.from_local(config_path, model_path, repo_id, revision, device)
 
     @classmethod
-    def from_local(cls, config_path: str, model_path: str, repo_id: str, revision: str, device: str = "cuda") -> "Zonos":
+    def from_local(
+        cls, config_path: str, model_path: str, repo_id: str, revision: str, device: str = "cuda"
+    ) -> "Zonos":
         config = ZonosConfig.from_dict(json.load(open(config_path)))
         with torch.device(device):
             model = cls(config, repo_id, revision)
         load_model(model, model_path, device=device)
         return model
-    
+
     def embed_spk_audio(self, wav: torch.Tensor, sr: int) -> torch.Tensor:
         """Generate a speaker embedding from an audio clip."""
         if self.spk_clone_model is None:
             self.spk_clone_model = SpeakerEmbeddingLDA(self.repo_id, self.revision)
         _, spk_embedding = self.spk_clone_model(wav.to(self.spk_clone_model.device), sr)
-        return spk_embedding
+        return spk_embedding.unsqueeze(0)
 
     def embed_codes(self, codes: torch.Tensor) -> torch.Tensor:
         return sum(emb(codes[:, i]) for i, emb in enumerate(self.embeddings))
@@ -126,12 +128,13 @@ class Zonos(nn.Module):
                 self.prefix_conditioner(uncond_dict),
             ]
         )
-    
+
     def _disallow_cb_not_zero_eos(self, logits):
         eos_bias = torch.zeros_like(logits)
         eos_bias[:, 1:, self.eos_token_id] = -1e9
         return logits + eos_bias
 
+    @torch.inference_mode()
     def generate(
         self,
         prefix_conditioning: torch.Tensor,  # [bsz, cond_seq_len, d_model]
