@@ -13,6 +13,7 @@ from src.codebook_pattern import apply_delay_pattern, revert_delay_pattern
 from src.conditioning import PrefixConditioner
 from src.config import ZonosConfig
 from src.sampling import sample_from_logits
+from src.speaker_cloning import SpeakerEmbeddingLDA
 
 
 class Zonos(nn.Module):
@@ -26,6 +27,7 @@ class Zonos(nn.Module):
         self.autoencoder = DACAutoencoder()
         self.backbone = ZonosBackbone(config.backbone)
         self.prefix_conditioner = PrefixConditioner(config.prefix_conditioner, dim)
+        self.spk_clone_model = None
 
         # TODO: pad to multiple of at least 8
         self.embeddings = nn.ModuleList([nn.Embedding(1026, dim) for _ in range(self.autoencoder.num_codebooks)])
@@ -47,6 +49,13 @@ class Zonos(nn.Module):
             model = cls(config, repo_id, revision)
         load_model(model, model_path, device=device)
         return model
+    
+    def embed_spk_audio(self, wav: torch.Tensor, sr: int) -> torch.Tensor:
+        """Generate a speaker embedding from an audio clip."""
+        if self.spk_clone_model is None:
+            self.spk_clone_model = SpeakerEmbeddingLDA(self.repo_id, self.revision)
+        _, spk_embedding = self.spk_clone_model(wav.to(self.spk_clone_model.device), sr)
+        return spk_embedding
 
     def embed_codes(self, codes: torch.Tensor) -> torch.Tensor:
         return sum(emb(codes[:, i]) for i, emb in enumerate(self.embeddings))
