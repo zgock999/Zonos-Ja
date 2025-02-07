@@ -33,4 +33,4 @@ uv sync
 ```bash
 uv run sample.py
 ```
-This will produce `sample.wav`
+This will produce `sample.wav` in the `Zonos` directory.
