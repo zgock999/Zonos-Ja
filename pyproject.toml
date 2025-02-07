@@ -1,0 +1,31 @@
+[project]
+name = "zaudio-minimal-transformer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+build = ["setuptools>=75.8.0"]
+direct = ["torch>=2.5.1"]
+main = [
+    "inflect>=7.5.0",
+    "kanjize>=1.5.0",
+    "numpy>=2.2.2",
+    "phonemizer>=3.3.0",
+    "sudachidict-full>=20241021",
+    "sudachipy>=0.6.10",
+    "torchaudio>=2.5.1",
+    "transformers>=4.48.1",
+    "flash-attn>=2.7.3",
+    "mamba-ssm>=2.2.4",
+    "causal-conv1d>=1.5.0.post8",
+]
+
+[tool.uv]
+default-groups = ["build", "direct", "main"]
+no-build-isolation-package = ["flash-attn", "mamba-ssm", "causal-conv1d"]
+
+[tool.ruff]
+line-length = 120
