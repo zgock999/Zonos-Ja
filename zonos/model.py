@@ -126,7 +126,7 @@ class Zonos(nn.Module):
                 self.prefix_conditioner(uncond_dict),
             ]
         )
-
+    
     def generate(
         self,
         prefix_conditioning: torch.Tensor,  # [bsz, cond_seq_len, d_model]
