@@ -305,3 +305,56 @@ class PrefixConditioner(Conditioner):
         assert all(c.shape[0] in (max_bsz, 1) for c in conds)
         conds = [c.expand(max_bsz, -1, -1) for c in conds]
         return self.norm(self.project(torch.cat(conds, dim=-2)))
+
+def make_cond_dict(
+    text: str = "It would be nice to have time for testing, indeed.",
+    language: str = "en-us",
+    speaker: torch.Tensor | None = None,
+    emotion: torch.Tensor | None = None,
+    fmax: float = 22050.0,
+    pitch_std: float = 20.0,
+    speaking_rate: float = 15.0,
+    language_id: int = 24,  # 24 = "en-us" in your language indexing
+    vqscore_8: torch.Tensor | None = None,
+    ctc_loss: float = 0.0,
+    dnsmos_ovrl: float = 4.0,
+    speaker_noised: bool = False,
+    device: str = "cuda",
+    speaker_dim: int = 128,
+) -> dict:
+    """
+    A helper to build the 'cond_dict' that your model expects.
+    By default, it will generate a random speaker embedding
+    (unless you provide your own).
+    """
+
+    if speaker is None:
+        speaker = (3.0 * torch.randn((1, 1, speaker_dim), device=device)).unsqueeze(0).to(torch.bfloat16)
+
+    if emotion is None:
+        emotion = torch.tensor(
+            [[0.3077, 0.0256, 0.0256, 0.0256, 0.0256, 0.0256, 0.2564, 0.3077]],
+            device=device,
+        )
+
+    if vqscore_8 is None:
+        vqscore_8 = torch.tensor([0.78] * 8, device=device).view(1, 8)
+
+    cond_dict = {
+        "espeak": ([text], [language]),
+        "speaker": speaker,
+        "emotion": emotion,
+        "fmax": torch.tensor([[fmax]], device=device),
+        "pitch_std": torch.tensor([[pitch_std]], device=device),
+        "speaking_rate": torch.tensor([[speaking_rate]], device=device),
+        "language_id": torch.tensor([language_id], device=device), #.view(1, 1, 1)
+        "vqscore_8": vqscore_8,
+        "ctc_loss": torch.tensor([[ctc_loss]], device=device),
+        "dnsmos_ovrl": torch.tensor([[dnsmos_ovrl]], device=device),
+        "speaker_noised": torch.tensor([[int(speaker_noised)]], device=device),
+    }
+    for k in cond_dict:
+        if k != "espeak" and k != "speaker":
+            cond_dict[k] = cond_dict[k].unsqueeze(0).unsqueeze(0)
+
+    return cond_dict

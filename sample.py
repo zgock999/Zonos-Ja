@@ -1,22 +1,22 @@
 import torch
 import torchaudio
 from zonos.model import Zonos
+from zonos.conditioning import make_cond_dict
 
 model = Zonos.from_pretrained("Zyphra/Zonos-v0.1-transformer", device="cuda")
 model.bfloat16()
 
-wav, sampling_rate = torchaudio.load("./britishmale3.mp3")
+wav, sampling_rate = torchaudio.load("./exampleaudio.mp3")
 spk_embedding = model.embed_spk_audio(wav, sampling_rate)
 
 torch.manual_seed(421)
 
-conditioning = model.prepare_conditioning(
-    {
-        "espeak": (["It would be nice to have time for testing, indeed."], ["en-us"]),
-        "language_id": torch.tensor([24], device="cuda").view(1, 1, 1),  # 24 corresponds to "en-us"
-        "speaker": spk_embedding.to(torch.bfloat16),
-    }
+cond_dict = make_cond_dict(
+    text="Hello, world!",
+    speaker=spk_embedding.to(torch.bfloat16),
+    language="en-us",
 )
+conditioning = model.prepare_conditioning(cond_dict)
 
 codes = model.generate(conditioning)
 
