@@ -314,7 +314,6 @@ def make_cond_dict(
     fmax: float = 22050.0,
     pitch_std: float = 20.0,
     speaking_rate: float = 15.0,
-    language_id: int = 24,  # 24 = "en-us" in your language indexing
     vqscore_8: torch.Tensor | None = None,
     ctc_loss: float = 0.0,
     dnsmos_ovrl: float = 4.0,
@@ -323,10 +322,24 @@ def make_cond_dict(
     speaker_dim: int = 128,
 ) -> dict:
     """
-    A helper to build the 'cond_dict' that your model expects.
+    A helper to build the 'cond_dict' that the model expects.
     By default, it will generate a random speaker embedding
-    (unless you provide your own).
     """
+    language_codes = [
+        'af', 'am', 'an', 'ar', 'as', 'az', 'ba', 'bg', 'bn', 'bpy', 'bs', 'ca', 'cmn',
+        'cs', 'cy', 'da', 'de', 'el', 'en-029', 'en-gb', 'en-gb-scotland', 'en-gb-x-gbclan',
+        'en-gb-x-gbcwmd', 'en-gb-x-rp', 'en-us', 'eo', 'es', 'es-419', 'et', 'eu', 'fa',
+        'fa-latn', 'fi', 'fr-be', 'fr-ch', 'fr-fr', 'ga', 'gd', 'gn', 'grc', 'gu', 'hak',
+        'hi', 'hr', 'ht', 'hu', 'hy', 'hyw', 'ia', 'id', 'is', 'it', 'ja', 'jbo', 'ka',
+        'kk', 'kl', 'kn', 'ko', 'kok', 'ku', 'ky', 'la', 'lfn', 'lt', 'lv', 'mi', 'mk',
+        'ml', 'mr', 'ms', 'mt', 'my', 'nb', 'nci', 'ne', 'nl', 'om', 'or', 'pa', 'pap',
+        'pl', 'pt', 'pt-br', 'py', 'quc', 'ro', 'ru', 'ru-lv', 'sd', 'shn', 'si', 'sk',
+        'sl', 'sq', 'sr', 'sv', 'sw', 'ta', 'te', 'tn', 'tr', 'tt', 'ur', 'uz', 'vi',
+        'vi-vn-x-central', 'vi-vn-x-south', 'yue'
+    ]
+    assert language.lower() in language_codes, "Please pick a supported language"
+
+    language_code_to_id = {lang: i for i, lang in enumerate(language_codes)}
 
     if speaker is None:
         speaker = (3.0 * torch.randn((1, 1, speaker_dim), device=device)).unsqueeze(0).to(torch.bfloat16)
@@ -347,7 +360,7 @@ def make_cond_dict(
         "fmax": torch.tensor([[fmax]], device=device),
         "pitch_std": torch.tensor([[pitch_std]], device=device),
         "speaking_rate": torch.tensor([[speaking_rate]], device=device),
-        "language_id": torch.tensor([language_id], device=device), #.view(1, 1, 1)
+        "language_id": torch.tensor([language_code_to_id[language]], device=device),
         "vqscore_8": vqscore_8,
         "ctc_loss": torch.tensor([[ctc_loss]], device=device),
         "dnsmos_ovrl": torch.tensor([[dnsmos_ovrl]], device=device),
