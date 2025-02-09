@@ -17,7 +17,7 @@ from zonos.speaker_cloning import SpeakerEmbeddingLDA
 
 
 class Zonos(nn.Module):
-    def __init__(self, config: ZonosConfig, repo_id, revision):
+    def __init__(self, config: ZonosConfig):
         super().__init__()
         self.config = config
         dim = config.backbone.d_model
@@ -33,29 +33,26 @@ class Zonos(nn.Module):
         self.embeddings = nn.ModuleList([nn.Embedding(1026, dim) for _ in range(self.autoencoder.num_codebooks)])
         self.heads = nn.ModuleList([nn.Linear(dim, 1025, bias=False) for _ in range(self.autoencoder.num_codebooks)])
 
-        self.repo_id = repo_id
-        self.revision = revision
-
     @classmethod
     def from_pretrained(cls, repo_id: str, revision: str | None = None, device: str = "cuda") -> "Zonos":
         config_path = hf_hub_download(repo_id=repo_id, filename="config.json", revision=revision)
         model_path = hf_hub_download(repo_id=repo_id, filename="model.safetensors", revision=revision)
-        return cls.from_local(config_path, model_path, repo_id, revision, device)
+        return cls.from_local(config_path, model_path, device)
 
     @classmethod
     def from_local(
-        cls, config_path: str, model_path: str, repo_id: str, revision: str, device: str = "cuda"
+        cls, config_path: str, model_path: str, device: str = "cuda"
     ) -> "Zonos":
         config = ZonosConfig.from_dict(json.load(open(config_path)))
         with torch.device(device):
-            model = cls(config, repo_id, revision)
+            model = cls(config)
         load_model(model, model_path, device=device)
         return model
 
     def embed_spk_audio(self, wav: torch.Tensor, sr: int) -> torch.Tensor:
         """Generate a speaker embedding from an audio clip."""
         if self.spk_clone_model is None:
-            self.spk_clone_model = SpeakerEmbeddingLDA(self.repo_id, self.revision)
+            self.spk_clone_model = SpeakerEmbeddingLDA()
         _, spk_embedding = self.spk_clone_model(wav.to(self.spk_clone_model.device), sr)
         return spk_embedding.unsqueeze(0)
 

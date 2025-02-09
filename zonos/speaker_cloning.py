@@ -385,18 +385,15 @@ class SpeakerEmbedding(nn.Module):
 class SpeakerEmbeddingLDA(nn.Module):
     def __init__(
         self,
-        repo_id,
-        revision,
         device: str = "cuda",
     ):
         super().__init__()
-        spk_model_path = hf_hub_download(repo_id=repo_id, filename="ResNet293_SimAM_ASP_base.pt", revision=revision)
-        lda_spk_model_path = hf_hub_download(repo_id=repo_id, filename="ResNet293_SimAM_ASP_base_LDA-128.pt", revision=revision)
+        spk_model_path = hf_hub_download(repo_id="Zyphra/Zonos-v0.1-speaker-embedding", filename="ResNet293_SimAM_ASP_base.pt")
+        lda_spk_model_path = hf_hub_download(repo_id="Zyphra/Zonos-v0.1-speaker-embedding", filename="ResNet293_SimAM_ASP_base_LDA-128.pt")
 
         self.device = device
         with torch.device(device):
             self.model = SpeakerEmbedding(spk_model_path, device)
-
             lda_sd = torch.load(lda_spk_model_path, weights_only=True)
             out_features, in_features = lda_sd["weight"].shape
             self.lda = nn.Linear(in_features, out_features, bias=True, dtype=torch.float32)
