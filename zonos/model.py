@@ -172,7 +172,7 @@ class Zonos(nn.Module):
             input_ids = delayed_codes[..., offset - 1 : offset]
             logits = self._decode_one_token(input_ids, inference_params, cfg_scale)
             logits = self._disallow_cb_not_zero_eos(logits)
-            next_token = sample_from_logits(logits, **sampling_params)
+            next_token = sample_from_logits(logits, generated_tokens=delayed_codes[..., :offset], **sampling_params)
             if offset > 8 and (next_token == self.eos_token_id).any():
                 break
 

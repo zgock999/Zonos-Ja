@@ -81,12 +81,17 @@ def apply_min_p(probs: torch.Tensor, min_p: float) -> torch.Tensor:
 
 
 def modify_logit_for_repetition_penalty(
-    logits: torch.Tensor, generated_tokens: torch.Tensor, repetition_penalty: float = 1.0
+    logits: torch.Tensor,
+    generated_tokens: torch.Tensor,
+    repetition_penalty: float,
+    repetition_penalty_window: int,
 ):
-    """Apply repetition penalty. See https://arxiv.org/abs/1909.05858
+    """See https://arxiv.org/abs/1909.05858
+    Apply repetition penalty over a sliding window of the last `repetition_penalty_window` tokens.
     logits: (batch_size, n_codebooks, vocab_size)
     generated_tokens: (batch_size, n_codebooks, seq_len)
     """
+    generated_tokens = generated_tokens[..., -repetition_penalty_window:]
     generated_tokens = generated_tokens.clamp_max(logits.shape[-1] - 1).to(torch.int64)
     rp = torch.full_like(logits, repetition_penalty)
     factors = torch.ones_like(logits).scatter_reduce(2, generated_tokens, rp, reduce="prod")
@@ -100,7 +105,8 @@ def sample_from_logits(
     top_k: int = 0,
     min_p: float = 0.0,
     generated_tokens: torch.Tensor | None = None,
-    repetition_penalty: float = 1.0,
+    repetition_penalty: float = 3.0,
+    repetition_penalty_window: float = 2,
 ) -> torch.Tensor:
     """Sample next token from logits using temperature, top-p, top-k, or min-p sampling.
 
@@ -116,7 +122,7 @@ def sample_from_logits(
         torch.Tensor: Sampled tokens.
     """
     if repetition_penalty != 1.0 and generated_tokens is not None:
-        logits = modify_logit_for_repetition_penalty(logits, generated_tokens, repetition_penalty)
+        logits = modify_logit_for_repetition_penalty(logits, generated_tokens, repetition_penalty, repetition_penalty_window)
 
     if temperature > 0:
         probs = torch.softmax(logits / temperature, dim=-1)
