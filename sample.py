@@ -3,6 +3,7 @@ import torchaudio
 from zonos.model import Zonos
 from zonos.conditioning import make_cond_dict
 
+# Use the hybrid with "Zyphra/Zonos-v0.1-hybrid"
 model = Zonos.from_pretrained("Zyphra/Zonos-v0.1-transformer", device="cuda")
 model.bfloat16()
 
