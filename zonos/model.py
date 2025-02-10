@@ -242,4 +242,6 @@ class Zonos(nn.Module):
         out_codes.masked_fill_(out_codes >= 1024, 0)
         out_codes = out_codes[..., : offset - 9]
 
+        self._cg_graph = None # reset cuda graph to avoid cache changes
+
         return out_codes
