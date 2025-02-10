@@ -9,6 +9,7 @@ device = "cuda"
 CURRENT_MODEL_TYPE = None
 CURRENT_MODEL = None
 
+
 def load_model_if_needed(model_choice: str):
     global CURRENT_MODEL_TYPE, CURRENT_MODEL
     if CURRENT_MODEL_TYPE != model_choice:
@@ -29,6 +30,7 @@ def load_model_if_needed(model_choice: str):
         print(f"{model_choice} model is already loaded.")
     return CURRENT_MODEL
 
+
 def update_ui(model_choice):
     """
     Dynamically show/hide UI elements based on the model's conditioners.
@@ -37,7 +39,7 @@ def update_ui(model_choice):
     model = load_model_if_needed(model_choice)
     cond_names = [c.name for c in model.prefix_conditioner.conditioners]
     print("Conditioners in this model:", cond_names)
-    
+
     text_update = gr.update(visible=("espeak" in cond_names))
     language_update = gr.update(visible=("espeak" in cond_names))
     speaker_audio_update = gr.update(visible=("speaker" in cond_names))
@@ -66,33 +68,34 @@ def update_ui(model_choice):
     skip_speaker_noised_update = gr.update(visible=("speaker_noised" in cond_names))
 
     return (
-        text_update,                 # 1
-        language_update,             # 2
-        speaker_audio_update,        # 3
-        prefix_audio_update,         # 4
-        skip_speaker_update,         # 5
-        skip_emotion_update,         # 6
-        emotion1_update,             # 7
-        emotion2_update,             # 8
-        emotion3_update,             # 9
-        emotion4_update,             # 10
-        emotion5_update,             # 11
-        emotion6_update,             # 12
-        emotion7_update,             # 13
-        emotion8_update,             # 14
-        skip_vqscore_8_update,       # 15
-        vq_single_slider_update,     # 16
-        fmax_slider_update,          # 17
-        skip_fmax_update,            # 18
-        pitch_std_slider_update,     # 19
-        skip_pitch_std_update,       # 20
-        speaking_rate_slider_update, # 21
-        skip_speaking_rate_update,   # 22
-        dnsmos_slider_update,        # 23
-        skip_dnsmos_ovrl_update,     # 24
-        speaker_noised_checkbox_update, # 25
+        text_update,  # 1
+        language_update,  # 2
+        speaker_audio_update,  # 3
+        prefix_audio_update,  # 4
+        skip_speaker_update,  # 5
+        skip_emotion_update,  # 6
+        emotion1_update,  # 7
+        emotion2_update,  # 8
+        emotion3_update,  # 9
+        emotion4_update,  # 10
+        emotion5_update,  # 11
+        emotion6_update,  # 12
+        emotion7_update,  # 13
+        emotion8_update,  # 14
+        skip_vqscore_8_update,  # 15
+        vq_single_slider_update,  # 16
+        fmax_slider_update,  # 17
+        skip_fmax_update,  # 18
+        pitch_std_slider_update,  # 19
+        skip_pitch_std_update,  # 20
+        speaking_rate_slider_update,  # 21
+        skip_speaking_rate_update,  # 22
+        dnsmos_slider_update,  # 23
+        skip_dnsmos_ovrl_update,  # 24
+        speaker_noised_checkbox_update,  # 25
         skip_speaker_noised_update,  # 26
     )
+
 
 def generate_audio(
     model_choice,
@@ -102,7 +105,14 @@ def generate_audio(
     prefix_audio,
     skip_speaker,
     skip_emotion,
-    e1, e2, e3, e4, e5, e6, e7, e8,
+    e1,
+    e2,
+    e3,
+    e4,
+    e5,
+    e6,
+    e7,
+    e8,
     skip_vqscore_8,
     vq_single,
     fmax,
@@ -158,26 +168,20 @@ def generate_audio(
     speaker_embedding = None
     if speaker_audio is not None and not skip_speaker:
         wav, sr = torchaudio.load(speaker_audio)
-        speaker_embedding = selected_model.embed_spk_audio(wav, sr)
+        speaker_embedding = selected_model.make_speaker_embedding(wav, sr)
         speaker_embedding = speaker_embedding.to(device, dtype=torch.bfloat16)
 
     audio_prefix_codes = None
     if prefix_audio is not None:
         wav_prefix, sr_prefix = torchaudio.load(prefix_audio)
         wav_prefix = wav_prefix.mean(0, keepdim=True)
-        wav_prefix = torchaudio.functional.resample(
-            wav_prefix, sr_prefix, selected_model.autoencoder.sampling_rate
-        )
+        wav_prefix = torchaudio.functional.resample(wav_prefix, sr_prefix, selected_model.autoencoder.sampling_rate)
         wav_prefix = wav_prefix.to(device, dtype=torch.float32)
         with torch.autocast(device, dtype=torch.float32):
-            audio_prefix_codes = selected_model.autoencoder.encode(
-                wav_prefix.unsqueeze(0)
-            )
+            audio_prefix_codes = selected_model.autoencoder.encode(wav_prefix.unsqueeze(0))
 
     emotion_tensor = torch.tensor(
-        [[float(e1), float(e2), float(e3), float(e4),
-          float(e5), float(e6), float(e7), float(e8)]],
-        device=device
+        [[float(e1), float(e2), float(e3), float(e4), float(e5), float(e6), float(e7), float(e8)]], device=device
     )
 
     vq_val = float(vq_single)
@@ -214,6 +218,7 @@ def generate_audio(
         wav_out = wav_out[0:1, :]
     return sr_out, wav_out.squeeze().numpy()
 
+
 def build_interface():
     with gr.Blocks() as demo:
         with gr.Row():
@@ -222,21 +227,19 @@ def build_interface():
                     choices=["Hybrid", "Transformer"],
                     value="Transformer",
                     label="Zonos Model Type",
-                    info="Select the model variant to use."
+                    info="Select the model variant to use.",
                 )
                 text = gr.Textbox(
-                    label="Text to Synthesize",
-                    value="Zonos uses eSpeak for text to phoneme conversion!",
-                    lines=4
+                    label="Text to Synthesize", value="Zonos uses eSpeak for text to phoneme conversion!", lines=4
                 )
                 language = gr.Dropdown(
                     choices=supported_language_codes,
                     value="en-us",
                     label="Language Code",
-                    info="Select a language code."
+                    info="Select a language code.",
                 )
             prefix_audio = gr.Audio(
-                value="silence_100ms.wav",
+                value="assets/silence_100ms.wav",
                 label="Optional Prefix Audio (continue from this audio)",
                 type="filepath",
             )
@@ -245,30 +248,17 @@ def build_interface():
                     label="Optional Speaker Audio (for cloning)",
                     type="filepath",
                 )
-                speaker_noised_checkbox = gr.Checkbox(
-                    label="Denoise Speaker?",
-                    value=False
-                )
+                speaker_noised_checkbox = gr.Checkbox(label="Denoise Speaker?", value=False)
 
         with gr.Column():
             gr.Markdown("## Conditioning Parameters")
 
             with gr.Row():
-                dnsmos_slider = gr.Slider(
-                    1.0, 5.0, value=4.0, step=0.1, label="DNSMOS Overall"
-                )
-                fmax_slider = gr.Slider(
-                    0, 24000, value=22050, step=1, label="Fmax (Hz)"
-                )
-                vq_single_slider = gr.Slider(
-                    0.5, 0.8, 0.78, 0.01, label="VQ Score"
-                )
-                pitch_std_slider = gr.Slider(
-                    0.0, 400.0, value=20.0, step=1, label="Pitch Std"
-                )
-                speaking_rate_slider = gr.Slider(
-                    0.0, 40.0, value=15.0, step=1, label="Speaking Rate"
-                )
+                dnsmos_slider = gr.Slider(1.0, 5.0, value=4.0, step=0.1, label="DNSMOS Overall")
+                fmax_slider = gr.Slider(0, 24000, value=22050, step=1, label="Fmax (Hz)")
+                vq_single_slider = gr.Slider(0.5, 0.8, 0.78, 0.01, label="VQ Score")
+                pitch_std_slider = gr.Slider(0.0, 400.0, value=20.0, step=1, label="Pitch Std")
+                speaking_rate_slider = gr.Slider(0.0, 40.0, value=15.0, step=1, label="Speaking Rate")
 
             gr.Markdown("### Emotion Sliders")
             with gr.Row():
@@ -296,15 +286,9 @@ def build_interface():
         with gr.Column():
             gr.Markdown("## Generation Parameters")
             with gr.Row():
-                cfg_scale_slider = gr.Slider(
-                    1.0, 5.0, 2.0, 0.1, label="CFG Scale"
-                )
-                min_p_slider = gr.Slider(
-                    0.0, 1.0, 0.1, 0.01, label="Min P"
-                )
-                seed_number = gr.Number(
-                    label="Seed", value=420, precision=0
-                )
+                cfg_scale_slider = gr.Slider(1.0, 5.0, 2.0, 0.1, label="CFG Scale")
+                min_p_slider = gr.Slider(0.0, 1.0, 0.1, 0.01, label="Min P")
+                seed_number = gr.Number(label="Seed", value=420, precision=0)
 
             generate_button = gr.Button("Generate Audio")
             output_audio = gr.Audio(label="Generated Audio", type="numpy")
@@ -313,31 +297,31 @@ def build_interface():
             fn=update_ui,
             inputs=[model_choice],
             outputs=[
-                text,                 # 1
-                language,             # 2
-                speaker_audio,        # 3
-                prefix_audio,         # 4
-                skip_speaker,         # 5
-                skip_emotion,         # 6
-                emotion1,             # 7
-                emotion2,             # 8
-                emotion3,             # 9
-                emotion4,             # 10
-                emotion5,             # 11
-                emotion6,             # 12
-                emotion7,             # 13
-                emotion8,             # 14
-                skip_vqscore_8,       # 15
-                vq_single_slider,     # 16
-                fmax_slider,          # 17
-                skip_fmax,            # 18
-                pitch_std_slider,     # 19
-                skip_pitch_std,       # 20
-                speaking_rate_slider, # 21
-                skip_speaking_rate,   # 22
-                dnsmos_slider,        # 23
-                skip_dnsmos_ovrl,     # 24
-                speaker_noised_checkbox, # 25
+                text,  # 1
+                language,  # 2
+                speaker_audio,  # 3
+                prefix_audio,  # 4
+                skip_speaker,  # 5
+                skip_emotion,  # 6
+                emotion1,  # 7
+                emotion2,  # 8
+                emotion3,  # 9
+                emotion4,  # 10
+                emotion5,  # 11
+                emotion6,  # 12
+                emotion7,  # 13
+                emotion8,  # 14
+                skip_vqscore_8,  # 15
+                vq_single_slider,  # 16
+                fmax_slider,  # 17
+                skip_fmax,  # 18
+                pitch_std_slider,  # 19
+                skip_pitch_std,  # 20
+                speaking_rate_slider,  # 21
+                skip_speaking_rate,  # 22
+                dnsmos_slider,  # 23
+                skip_dnsmos_ovrl,  # 24
+                speaker_noised_checkbox,  # 25
                 skip_speaker_noised,  # 26
             ],
         )
@@ -415,6 +399,7 @@ def build_interface():
         )
 
     return demo
+
 
 if __name__ == "__main__":
     demo = build_interface()

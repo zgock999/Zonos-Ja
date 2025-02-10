@@ -47,21 +47,19 @@ class Zonos(nn.Module):
         return cls.from_local(config_path, model_path, device)
 
     @classmethod
-    def from_local(
-        cls, config_path: str, model_path: str, device: str = "cuda"
-    ) -> "Zonos":
+    def from_local(cls, config_path: str, model_path: str, device: str = "cuda") -> "Zonos":
         config = ZonosConfig.from_dict(json.load(open(config_path)))
         with torch.device(device):
             model = cls(config)
         load_model(model, model_path, device=device)
-        return model
+        return model.bfloat16()
 
-    def embed_spk_audio(self, wav: torch.Tensor, sr: int) -> torch.Tensor:
+    def make_speaker_embedding(self, wav: torch.Tensor, sr: int) -> torch.Tensor:
         """Generate a speaker embedding from an audio clip."""
         if self.spk_clone_model is None:
             self.spk_clone_model = SpeakerEmbeddingLDA()
         _, spk_embedding = self.spk_clone_model(wav.to(self.spk_clone_model.device), sr)
-        return spk_embedding.unsqueeze(0)
+        return spk_embedding.unsqueeze(0).bfloat16()
 
     def embed_codes(self, codes: torch.Tensor) -> torch.Tensor:
         return sum(emb(codes[:, i]) for i, emb in enumerate(self.embeddings))
@@ -126,11 +124,7 @@ class Zonos(nn.Module):
             def capture_region():
                 hidden_states_local = self.embed_codes(self._cg_input_ids)
                 hidden_states_local = hidden_states_local.repeat(2, 1, 1)
-                self._cg_logits = self._compute_logits(
-                    hidden_states_local,
-                    self._cg_inference_params,
-                    self._cg_scale
-                )
+                self._cg_logits = self._compute_logits(hidden_states_local, self._cg_inference_params, self._cg_scale)
 
             with torch.cuda.graph(g):
                 capture_region()
@@ -225,11 +219,7 @@ class Zonos(nn.Module):
             input_ids = delayed_codes[..., offset - 1 : offset]
             logits = self._decode_one_token(input_ids, inference_params, cfg_scale)
             logits = self._disallow_cb_not_zero_eos(logits)
-            next_token = sample_from_logits(
-                logits,
-                generated_tokens=delayed_codes[..., :offset],
-                **sampling_params
-            )
+            next_token = sample_from_logits(logits, generated_tokens=delayed_codes[..., :offset], **sampling_params)
             if offset > 8 and (next_token == self.eos_token_id).any():
                 break
 
@@ -242,6 +232,6 @@ class Zonos(nn.Module):
         out_codes.masked_fill_(out_codes >= 1024, 0)
         out_codes = out_codes[..., : offset - 9]
 
-        self._cg_graph = None # reset cuda graph to avoid cache changes
+        self._cg_graph = None  # reset cuda graph to avoid cache changes
 
         return out_codes
