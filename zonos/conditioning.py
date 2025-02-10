@@ -1,5 +1,5 @@
 from functools import cache
-from typing import Any, Literal
+from typing import Any, Literal, Iterable
 
 import torch
 import torch.nn as nn
@@ -306,6 +306,20 @@ class PrefixConditioner(Conditioner):
         conds = [c.expand(max_bsz, -1, -1) for c in conds]
         return self.norm(self.project(torch.cat(conds, dim=-2)))
 
+
+supported_language_codes = [
+    'af', 'am', 'an', 'ar', 'as', 'az', 'ba', 'bg', 'bn', 'bpy', 'bs', 'ca', 'cmn',
+    'cs', 'cy', 'da', 'de', 'el', 'en-029', 'en-gb', 'en-gb-scotland', 'en-gb-x-gbclan',
+    'en-gb-x-gbcwmd', 'en-gb-x-rp', 'en-us', 'eo', 'es', 'es-419', 'et', 'eu', 'fa',
+    'fa-latn', 'fi', 'fr-be', 'fr-ch', 'fr-fr', 'ga', 'gd', 'gn', 'grc', 'gu', 'hak',
+    'hi', 'hr', 'ht', 'hu', 'hy', 'hyw', 'ia', 'id', 'is', 'it', 'ja', 'jbo', 'ka',
+    'kk', 'kl', 'kn', 'ko', 'kok', 'ku', 'ky', 'la', 'lfn', 'lt', 'lv', 'mi', 'mk',
+    'ml', 'mr', 'ms', 'mt', 'my', 'nb', 'nci', 'ne', 'nl', 'om', 'or', 'pa', 'pap',
+    'pl', 'pt', 'pt-br', 'py', 'quc', 'ro', 'ru', 'ru-lv', 'sd', 'shn', 'si', 'sk',
+    'sl', 'sq', 'sr', 'sv', 'sw', 'ta', 'te', 'tn', 'tr', 'tt', 'ur', 'uz', 'vi',
+    'vi-vn-x-central', 'vi-vn-x-south', 'yue'
+]
+
 def make_cond_dict(
     text: str = "It would be nice to have time for testing, indeed.",
     language: str = "en-us",
@@ -318,6 +332,7 @@ def make_cond_dict(
     ctc_loss: float = 0.0,
     dnsmos_ovrl: float = 4.0,
     speaker_noised: bool = False,
+    unconditional_keys: Iterable[str] = {"vqscore_8", "dnsmos_ovrl"},
     device: str = "cuda",
     speaker_dim: int = 128,
 ) -> dict:
@@ -325,21 +340,9 @@ def make_cond_dict(
     A helper to build the 'cond_dict' that the model expects.
     By default, it will generate a random speaker embedding
     """
-    language_codes = [
-        'af', 'am', 'an', 'ar', 'as', 'az', 'ba', 'bg', 'bn', 'bpy', 'bs', 'ca', 'cmn',
-        'cs', 'cy', 'da', 'de', 'el', 'en-029', 'en-gb', 'en-gb-scotland', 'en-gb-x-gbclan',
-        'en-gb-x-gbcwmd', 'en-gb-x-rp', 'en-us', 'eo', 'es', 'es-419', 'et', 'eu', 'fa',
-        'fa-latn', 'fi', 'fr-be', 'fr-ch', 'fr-fr', 'ga', 'gd', 'gn', 'grc', 'gu', 'hak',
-        'hi', 'hr', 'ht', 'hu', 'hy', 'hyw', 'ia', 'id', 'is', 'it', 'ja', 'jbo', 'ka',
-        'kk', 'kl', 'kn', 'ko', 'kok', 'ku', 'ky', 'la', 'lfn', 'lt', 'lv', 'mi', 'mk',
-        'ml', 'mr', 'ms', 'mt', 'my', 'nb', 'nci', 'ne', 'nl', 'om', 'or', 'pa', 'pap',
-        'pl', 'pt', 'pt-br', 'py', 'quc', 'ro', 'ru', 'ru-lv', 'sd', 'shn', 'si', 'sk',
-        'sl', 'sq', 'sr', 'sv', 'sw', 'ta', 'te', 'tn', 'tr', 'tt', 'ur', 'uz', 'vi',
-        'vi-vn-x-central', 'vi-vn-x-south', 'yue'
-    ]
-    assert language.lower() in language_codes, "Please pick a supported language"
+    assert language.lower() in supported_language_codes, "Please pick a supported language"
 
-    language_code_to_id = {lang: i for i, lang in enumerate(language_codes)}
+    language_code_to_id = {lang: i for i, lang in enumerate(supported_language_codes)}
 
     if speaker is None:
         speaker = (3.0 * torch.randn((1, 1, speaker_dim), device=device)).unsqueeze(0).to(torch.bfloat16)
