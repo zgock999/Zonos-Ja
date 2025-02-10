@@ -33,6 +33,13 @@ class Zonos(nn.Module):
         self.embeddings = nn.ModuleList([nn.Embedding(1026, dim) for _ in range(self.autoencoder.num_codebooks)])
         self.heads = nn.ModuleList([nn.Linear(dim, 1025, bias=False) for _ in range(self.autoencoder.num_codebooks)])
 
+        self._cg_graph = None
+        self._cg_batch_size = None
+        self._cg_input_ids = None
+        self._cg_logits = None
+        self._cg_inference_params = None
+        self._cg_scale = None
+
     @classmethod
     def from_pretrained(cls, repo_id: str, revision: str | None = None, device: str = "cuda") -> "Zonos":
         config_path = hf_hub_download(repo_id=repo_id, filename="config.json", revision=revision)
@@ -85,11 +92,57 @@ class Zonos(nn.Module):
         """
         Single-step decode. Prepares the hidden states, possibly replicates them
         for CFG, and then delegates to `_compute_logits`.
+
+        Below we wrap this function with a simple CUDA Graph capturing mechanism,
+        doing 3 warmup steps if needed and then capturing or replaying the graph.
+        We only recapture if the batch size changes.
         """
-        hidden_states = self.embed_codes(input_ids)
-        if cfg_scale != 1.0:
-            hidden_states = hidden_states.repeat(2, 1, 1)
-        return self._compute_logits(hidden_states, inference_params, cfg_scale)
+        # TODO: support cfg_scale==1
+        if cfg_scale == 1.0:
+            hidden_states = self.embed_codes(input_ids)
+            return self._compute_logits(hidden_states, inference_params, cfg_scale)
+
+        bsz = input_ids.size(0)
+
+        need_capture = (self._cg_graph is None) or (self._cg_batch_size != bsz)
+
+        if need_capture:
+            self._cg_graph = None
+
+            self._cg_batch_size = bsz
+            self._cg_inference_params = inference_params
+            self._cg_scale = cfg_scale
+
+            for _ in range(3):
+                hidden_states = self.embed_codes(input_ids)
+                hidden_states = hidden_states.repeat(2, 1, 1)  # because cfg != 1.0
+                logits = self._compute_logits(hidden_states, inference_params, cfg_scale)
+
+            self._cg_input_ids = input_ids.clone()
+            self._cg_logits = torch.empty_like(logits)
+
+            g = torch.cuda.CUDAGraph()
+
+            def capture_region():
+                hidden_states_local = self.embed_codes(self._cg_input_ids)
+                hidden_states_local = hidden_states_local.repeat(2, 1, 1)
+                self._cg_logits = self._compute_logits(
+                    hidden_states_local,
+                    self._cg_inference_params,
+                    self._cg_scale
+                )
+
+            with torch.cuda.graph(g):
+                capture_region()
+
+            self._cg_graph = g
+
+        else:
+            self._cg_input_ids.copy_(input_ids)
+
+        self._cg_graph.replay()
+
+        return self._cg_logits
 
     def _prefill(
         self,
@@ -172,7 +225,11 @@ class Zonos(nn.Module):
             input_ids = delayed_codes[..., offset - 1 : offset]
             logits = self._decode_one_token(input_ids, inference_params, cfg_scale)
             logits = self._disallow_cb_not_zero_eos(logits)
-            next_token = sample_from_logits(logits, generated_tokens=delayed_codes[..., :offset], **sampling_params)
+            next_token = sample_from_logits(
+                logits,
+                generated_tokens=delayed_codes[..., :offset],
+                **sampling_params
+            )
             if offset > 8 and (next_token == self.eos_token_id).any():
                 break
 
