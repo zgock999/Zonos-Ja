@@ -1,6 +1,12 @@
 # Zonos-v0.1
 
-![Logo Header](content/ZonosHeader.png)
+<div align="center">
+<img src="content/ZonosHeader.png" 
+     alt="Alt text" 
+     style="width: 500px;
+            height: auto;
+            object-position: center top;">
+</div>
 
 Zonos-v0.1 is a leading open-weight text-to-speech model, delivering expressiveness and quality on par with—or even surpassing—top TTS providers.
 
@@ -8,7 +14,13 @@ It enables highly naturalistic speech generation from text prompts when given a 
 
 Trained on approximately 200,000 hours of primarily English speech data, Zonos follows a straightforward architecture: text normalization and phonemization via eSpeak, followed by DAC token prediction through a transformer or hybrid backbone. An architecture overview can be seen below.
 
-![Architecture Diagram](content/ArchitectureDiagram.png)
+<div align="center">
+<img src="content/ArchitectureDiagram.png" 
+     alt="Alt text" 
+     style="width: 1000px;
+            height: auto;
+            object-position: center top;">
+</div>
 
 Read more about our models [here](https://www.zyphra.com/post/beta-release-of-zonos-v0-1).
 
