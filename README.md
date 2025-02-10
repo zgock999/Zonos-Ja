@@ -100,7 +100,7 @@ torchaudio.save("sample.wav", wavs[0], model.autoencoder.sampling_rate)
 
 - **Type:** `EspeakPhonemeConditioner`
 - **Description:**  
-  
+  Responsible for cleaning, phonemizing, tokenizing, and embedding the text provided to the model. If you would like to change how a word is pronounced you can do that here.
 
 ---
 
