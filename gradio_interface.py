@@ -1,6 +1,7 @@
 import torch
 import torchaudio
 import gradio as gr
+from os import getenv
 
 from zonos.model import Zonos
 from zonos.conditioning import make_cond_dict, supported_language_codes
@@ -403,4 +404,5 @@ def build_interface():
 
 if __name__ == "__main__":
     demo = build_interface()
-    demo.launch(server_name="0.0.0.0", server_port=7860, share=True)
+    share = getenv("GRADIO_SHARE", "False").lower() in ("true", "1", "t")
+    demo.launch(server_name="0.0.0.0", server_port=7860, share=share)
