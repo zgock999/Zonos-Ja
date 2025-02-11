@@ -21,6 +21,8 @@ dependencies = [
     "gradio>=5.15.0",
 ]
 
+# Note: Not actually optional. All the modeling code lives in mamba-ssm.
+# We put them here to make the two-stage installation process easier.
 [project.optional-dependencies]
 compile = [
     "flash-attn>=2.7.3",
