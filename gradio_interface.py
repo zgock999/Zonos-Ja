@@ -103,6 +103,7 @@ def generate_audio(
     seed,
     randomize_seed,
     unconditional_keys,
+    progress=gr.Progress(),
 ):
     """
     Generates audio based on the provided UI parameters.
@@ -160,6 +161,13 @@ def generate_audio(
     )
     conditioning = selected_model.prepare_conditioning(cond_dict)
 
+    estimated_generation_duration = 30 * len(text) / 400
+    estimated_total_steps = int(estimated_generation_duration * 86)
+
+    def update_progress(_frame: torch.Tensor, step: int, _total_steps: int) -> bool:
+        progress((step, estimated_total_steps))
+        return True
+
     codes = selected_model.generate(
         prefix_conditioning=conditioning,
         audio_prefix_codes=audio_prefix_codes,
@@ -167,6 +175,7 @@ def generate_audio(
         cfg_scale=cfg_scale,
         batch_size=1,
         sampling_params=dict(min_p=min_p),
+        callback=update_progress,
     )
 
     wav_out = selected_model.autoencoder.decode(codes).cpu().detach()

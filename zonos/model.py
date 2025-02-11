@@ -1,4 +1,5 @@
 import json
+from typing import Callable
 
 import safetensors
 import torch
@@ -189,6 +190,7 @@ class Zonos(nn.Module):
         batch_size: int = 1,
         sampling_params: dict = dict(min_p=0.1),
         progress_bar: bool = True,
+        callback: Callable[[torch.Tensor, int, int], bool] | None = None,
     ):
         assert cfg_scale != 1, "TODO: add support for cfg_scale=1"
         prefix_audio_len = 0 if audio_prefix_codes is None else audio_prefix_codes.shape[2]
@@ -222,9 +224,11 @@ class Zonos(nn.Module):
         logit_bias[:, 1:, self.eos_token_id] = -torch.inf  # only allow codebook 0 to predict EOS
 
         stopping = torch.zeros(batch_size, dtype=torch.bool, device="cuda")
-        remaining_steps = torch.full((batch_size,), delayed_codes.shape[2] - offset, device="cuda")
-        progress = tqdm(total=remaining_steps.max().item(), desc="Generating", disable=not progress_bar)
+        max_steps = delayed_codes.shape[2] - offset
+        remaining_steps = torch.full((batch_size,), max_steps, device="cuda")
+        progress = tqdm(total=max_steps, desc="Generating", disable=not progress_bar)
 
+        step = 0
         while torch.max(remaining_steps) > 0:
             offset += 1
             input_ids = delayed_codes[..., offset - 1 : offset]
@@ -252,6 +256,10 @@ class Zonos(nn.Module):
             remaining_steps -= 1
 
             progress.update()
+            step += 1
+
+            if callback is not None and not callback(frame, step, max_steps):
+                break
 
         out_codes = revert_delay_pattern(delayed_codes)
         out_codes.masked_fill_(out_codes >= 1024, 0)
