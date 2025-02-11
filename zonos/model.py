@@ -1,10 +1,10 @@
 import json
 
+import safetensors
 import torch
 import torch.nn as nn
 from huggingface_hub import hf_hub_download
 from mamba_ssm.utils.generation import InferenceParams
-from safetensors.torch import load_model
 from tqdm import trange
 
 from zonos.autoencoder import DACAutoencoder
@@ -49,10 +49,16 @@ class Zonos(nn.Module):
     @classmethod
     def from_local(cls, config_path: str, model_path: str, device: str = "cuda") -> "Zonos":
         config = ZonosConfig.from_dict(json.load(open(config_path)))
-        with torch.device(device):
-            model = cls(config)
-        load_model(model, model_path, device=device)
-        return model.bfloat16()
+        model = cls(config).to(device, torch.bfloat16)
+        model.autoencoder.dac.to(device)
+
+        sd = model.state_dict()
+        with safetensors.safe_open(model_path, framework="pt") as f:
+            for k in f.keys():
+                sd[k] = f.get_tensor(k)
+        model.load_state_dict(sd)
+
+        return model
 
     def make_speaker_embedding(self, wav: torch.Tensor, sr: int) -> torch.Tensor:
         """Generate a speaker embedding from an audio clip."""
