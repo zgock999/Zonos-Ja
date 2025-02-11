@@ -187,7 +187,10 @@ def build_interface():
                     info="Select the model variant to use.",
                 )
                 text = gr.Textbox(
-                    label="Text to Synthesize", value="Zonos uses eSpeak for text to phoneme conversion!", lines=4
+                    label="Text to Synthesize",
+                    value="Zonos uses eSpeak for text to phoneme conversion!",
+                    lines=4,
+                    max_length=500,  # approximately
                 )
                 language = gr.Dropdown(
                     choices=supported_language_codes,

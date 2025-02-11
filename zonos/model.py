@@ -194,11 +194,12 @@ class Zonos(nn.Module):
         prefix_audio_len = 0 if audio_prefix_codes is None else audio_prefix_codes.shape[2]
 
         unknown_token = -1
-        seq_len = prefix_conditioning.shape[1] + prefix_audio_len + max_new_tokens
+        audio_seq_len = prefix_audio_len + max_new_tokens
+        seq_len = prefix_conditioning.shape[1] + audio_seq_len
 
         inference_params = self.setup_cache(batch_size=batch_size * 2, max_seqlen=seq_len)
 
-        codes = torch.full((batch_size, 9, seq_len), unknown_token, device="cuda")
+        codes = torch.full((batch_size, 9, audio_seq_len), unknown_token, device="cuda")
         if audio_prefix_codes is not None:
             codes[..., :prefix_audio_len] = audio_prefix_codes
 
