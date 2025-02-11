@@ -80,6 +80,8 @@ _For repeated sampling we highly recommend using the gradio interface instead, a
 
 ## Installation
 
+**At the moment this repository only supports Linux systems (preferably Ubuntu 22.04/24.04) with recent NVIDIA GPUs (3000-series or newer, 6GB+ VRAM).**
+
 See also [Docker Installation](#docker-installation)
 
 #### System dependencies
