@@ -3,7 +3,7 @@ Here we will list out all the conditionings the model accepts as well as a short
 ### espeak
 - **Type:** `EspeakPhonemeConditioner`
 - **Description:**  
-  Responsible for cleaning, phonemizing, tokenizing, and embedding the text provided to the model. This is the text pre-processing pipeline. If you would like to change how a word is pronounced or enter raw phonemes you can do that here.
+  Responsible for cleaning, phonemicizing, tokenizing, and embedding the text provided to the model. This is the text pre-processing pipeline. If you would like to change how a word is pronounced or enter raw phonemes you can do that here.
 ---
 ### speaker
 - **Type:** `PassthroughConditioner`
