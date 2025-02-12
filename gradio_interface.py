@@ -3,9 +3,12 @@ import torchaudio
 import gradio as gr
 from os import getenv
 
-from zonos.model import Zonos, ZonosBackbone
+from zonos.model import Zonos
 from zonos.conditioning import make_cond_dict, supported_language_codes
 from zonos.utils import DEFAULT_DEVICE as device
+from zonos.backbone import BACKBONES
+
+ZonosBackbone = next(iter(BACKBONES.values()))
 
 CURRENT_MODEL_TYPE = None
 CURRENT_MODEL = None

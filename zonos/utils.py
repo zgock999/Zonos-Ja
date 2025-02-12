@@ -11,16 +11,17 @@ def find_multiple(n: int, k: int) -> int:
 
 def pad_weight_(w: nn.Embedding | nn.Linear, multiple: int):
     """Pad the weight of an embedding or linear layer to a multiple of `multiple`."""
-    if w.weight.shape[1] % multiple == 0:
-        return
-
     if isinstance(w, nn.Embedding):
         # Pad input dim
-        w.weight.data = F.pad(w.weight.data, (0, 0, 0, multiple - w.weight.shape[1]))
+        if w.weight.shape[1] % multiple == 0:
+            return
+        w.weight.data = F.pad(w.weight.data, (0, 0, 0, w.weight.shape[1] % multiple))
         w.num_embeddings, w.embedding_dim = w.weight.shape
     elif isinstance(w, nn.Linear):
         # Pad output dim
-        w.weight.data = F.pad(w.weight.data, (0, 0, 0, multiple - w.weight.shape[0]))
+        if w.weight.shape[0] % multiple == 0:
+            return
+        w.weight.data = F.pad(w.weight.data, (0, 0, 0, w.weight.shape[0] % multiple))
         w.out_features, w.in_features = w.weight.shape
     else:
         raise ValueError(f"Unsupported weight type: {type(w)}")
