@@ -51,6 +51,7 @@ class ZonosConfig:
     prefix_conditioner: PrefixConditionerConfig
     eos_token_id: int = 1024
     masked_token_id: int = 1025
+    pad_vocab_to_multiple_of: int = 8
 
     @classmethod
     def from_dict(cls, d: dict) -> "ZonosConfig":

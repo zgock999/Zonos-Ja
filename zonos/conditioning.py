@@ -52,6 +52,8 @@ class Conditioner(nn.Module):
 
 
 # ------- ESPEAK CONTAINMENT ZONE ------------------------------------------------------------------------------------------------------------------------------------------------
+import os
+import sys
 import re
 import unicodedata
 
@@ -61,6 +63,9 @@ import torch.nn as nn
 from kanjize import number2kanji
 from phonemizer.backend import EspeakBackend
 from sudachipy import Dictionary, SplitMode
+
+if sys.platform == "darwin":
+    os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = "/opt/homebrew/lib/libespeak-ng.dylib"
 
 # --- Number normalization code from https://github.com/daniilrobnikov/vits2/blob/main/text/normalize_numbers.py ---
 

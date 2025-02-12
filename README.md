@@ -81,7 +81,12 @@ _For repeated sampling we highly recommend using the gradio interface instead, a
 
 ## Installation
 
-**At the moment this repository only supports Linux systems (preferably Ubuntu 22.04/24.04) with recent NVIDIA GPUs (3000-series or newer, 6GB+ VRAM).**
+#### System requirements
+
+- **Operating System:** Linux (preferably Ubuntu 22.04/24.04), macOS
+- **GPU:** 6GB+ VRAM, Hybrid additionally requires a 3000-series or newer Nvidia GPU
+
+Note: Zonos can also run on CPU provided there is enough free RAM. However, this will be a lot slower than running on a dedicated GPU, and likely won't be sufficient for interactive use.
 
 See also [Docker Installation](#docker-installation)
 
@@ -90,7 +95,8 @@ See also [Docker Installation](#docker-installation)
 Zonos depends on the eSpeak library phonemization. You can install it on Ubuntu with the following command:
 
 ```bash
-apt install -y espeak-ng
+apt install -y espeak-ng # For Ubuntu
+# brew install espeak-ng # For MacOS
 ```
 
 #### Python dependencies
@@ -101,21 +107,22 @@ We highly recommend using a recent version of [uv](https://docs.astral.sh/uv/#in
 
 ```bash
 uv sync
-uv sync --extra compile
+uv sync --extra compile # optional but needed to run the hybrid
+uv pip install -e .
 ```
 
 ##### Installing into the system/actived environment using uv
 
 ```bash
 uv pip install -e .
-uv pip install -e .[compile]
+uv pip install -e .[compile] # optional but needed to run the hybrid
 ```
 
 ##### Installing into the system/actived environment using pip
 
 ```bash
 pip install -e .
-pip install --no-build-isolation -e .[compile]
+pip install --no-build-isolation -e .[compile] # optional but needed to run the hybrid
 ```
 
 ##### Confirm that it's working

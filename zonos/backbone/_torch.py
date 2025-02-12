@@ -4,6 +4,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from zonos.config import BackboneConfig, InferenceParams
+from zonos.utils import find_multiple
 
 
 def precompute_freqs_cis(seq_len: int, n_elem: int, base: float = 10000) -> torch.Tensor:
@@ -49,7 +50,7 @@ def _update_kv_cache(
     return kv_cache[batch_start:batch_end, :sequence_end, ...]
 
 
-class ZonosBackbone(nn.Module):
+class TorchZonosBackbone(nn.Module):
     supported_architectures = ["transformer"]
     freqs_cis: torch.Tensor
 
@@ -65,7 +66,7 @@ class ZonosBackbone(nn.Module):
         # TODO: This function should be pure
         head_dim = self.config.d_model // self.config.attn_cfg["num_heads"]
         self.freqs_cis = precompute_freqs_cis(16384, head_dim)
-
+        max_seqlen = find_multiple(max_seqlen, 8)
         return {
             i: layer.allocate_inference_cache(batch_size, max_seqlen, dtype=dtype)
             for i, layer in enumerate(self.layers)

@@ -8,17 +8,19 @@ from huggingface_hub import hf_hub_download
 from tqdm import tqdm
 
 from zonos.autoencoder import DACAutoencoder
-from zonos.backbone import ZonosBackbone
+from zonos.backbone import BACKBONES
 from zonos.codebook_pattern import apply_delay_pattern, revert_delay_pattern
 from zonos.conditioning import PrefixConditioner
 from zonos.config import InferenceParams, ZonosConfig
 from zonos.sampling import sample_from_logits
 from zonos.speaker_cloning import SpeakerEmbeddingLDA
-from zonos.utils import DEFAULT_DEVICE
+from zonos.utils import DEFAULT_DEVICE, pad_weight_
+
+DEFAULT_BACKBONE_CLS = next(iter(BACKBONES.values()))
 
 
 class Zonos(nn.Module):
-    def __init__(self, config: ZonosConfig):
+    def __init__(self, config: ZonosConfig, backbone_cls=DEFAULT_BACKBONE_CLS):
         super().__init__()
         self.config = config
         dim = config.backbone.d_model
@@ -26,7 +28,7 @@ class Zonos(nn.Module):
         self.masked_token_id = config.masked_token_id
 
         self.autoencoder = DACAutoencoder()
-        self.backbone = ZonosBackbone(config.backbone)
+        self.backbone = backbone_cls(config.backbone)
         self.prefix_conditioner = PrefixConditioner(config.prefix_conditioner, dim)
         self.spk_clone_model = None
 
@@ -41,20 +43,32 @@ class Zonos(nn.Module):
         self._cg_inference_params = None
         self._cg_scale = None
 
+        if config.pad_vocab_to_multiple_of:
+            self.register_load_state_dict_post_hook(self._pad_embeddings_and_heads)
+
+    def _pad_embeddings_and_heads(self, *args, **kwargs):
+        for w in [*self.embeddings, *self.heads]:
+            pad_weight_(w, self.config.pad_vocab_to_multiple_of)
+
     @property
     def device(self) -> torch.device:
         return next(self.parameters()).device
 
     @classmethod
-    def from_pretrained(cls, repo_id: str, revision: str | None = None, device: str = DEFAULT_DEVICE) -> "Zonos":
+    def from_pretrained(
+        cls, repo_id: str, revision: str | None = None, device: str = DEFAULT_DEVICE, **kwargs
+    ) -> "Zonos":
         config_path = hf_hub_download(repo_id=repo_id, filename="config.json", revision=revision)
         model_path = hf_hub_download(repo_id=repo_id, filename="model.safetensors", revision=revision)
         return cls.from_local(config_path, model_path, device)
 
     @classmethod
-    def from_local(cls, config_path: str, model_path: str, device: str = DEFAULT_DEVICE) -> "Zonos":
+    def from_local(
+        cls, config_path: str, model_path: str, device: str = DEFAULT_DEVICE, backbone: str | None = None
+    ) -> "Zonos":
         config = ZonosConfig.from_dict(json.load(open(config_path)))
-        model = cls(config).to(device, torch.bfloat16)
+        backbone_cls = BACKBONES[backbone] if backbone else DEFAULT_BACKBONE_CLS
+        model = cls(config, backbone_cls).to(device, torch.bfloat16)
         model.autoencoder.dac.to(device)
 
         sd = model.state_dict()
@@ -90,6 +104,7 @@ class Zonos(nn.Module):
         if cfg_scale != 1.0:
             cond_logits, uncond_logits = logits.chunk(2)
             logits = uncond_logits + (cond_logits - uncond_logits) * cfg_scale
+        logits[..., 1025:].fill_(-torch.inf)  # ensures padding is ignored
         return logits
 
     def _decode_one_token(
