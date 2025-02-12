@@ -97,6 +97,7 @@ class Zonos(nn.Module):
         input_ids: torch.Tensor,
         inference_params: InferenceParams,
         cfg_scale: float,
+        allow_cudagraphs: bool = True,
     ) -> torch.Tensor:
         """
         Single-step decode. Prepares the hidden states, possibly replicates them
@@ -113,7 +114,7 @@ class Zonos(nn.Module):
 
         bsz = input_ids.size(0)
 
-        if input_ids.device.type != "cuda":
+        if not allow_cudagraphs or input_ids.device.type != "cuda":
             hidden_states_local = self.embed_codes(input_ids)
             hidden_states_local = hidden_states_local.repeat(2, 1, 1)
             return self._compute_logits(hidden_states_local, inference_params, cfg_scale)
@@ -186,6 +187,10 @@ class Zonos(nn.Module):
             ]
         )
 
+    def can_use_cudagraphs(self) -> bool:
+        # Only the mamba-ssm backbone supports CUDA Graphs at the moment
+        return self.device.type == "cuda" and "_mamba_ssm" in str(self.backbone.__class__)
+
     @torch.inference_mode()
     def generate(
         self,
@@ -201,6 +206,11 @@ class Zonos(nn.Module):
         assert cfg_scale != 1, "TODO: add support for cfg_scale=1"
         prefix_audio_len = 0 if audio_prefix_codes is None else audio_prefix_codes.shape[2]
         device = self.device
+
+        # Use CUDA Graphs if supported, and torch.compile otherwise.
+        cg = self.can_use_cudagraphs()
+        decode_one_token = self._decode_one_token
+        decode_one_token = torch.compile(decode_one_token, dynamic=True, disable=cg)
 
         unknown_token = -1
         audio_seq_len = prefix_audio_len + max_new_tokens
@@ -235,12 +245,13 @@ class Zonos(nn.Module):
         max_steps = delayed_codes.shape[2] - offset
         remaining_steps = torch.full((batch_size,), max_steps, device=device)
         progress = tqdm(total=max_steps, desc="Generating", disable=not progress_bar)
+        cfg_scale = torch.tensor(cfg_scale)
 
         step = 0
         while torch.max(remaining_steps) > 0:
             offset += 1
             input_ids = delayed_codes[..., offset - 1 : offset]
-            logits = self._decode_one_token(input_ids, inference_params, cfg_scale)
+            logits = decode_one_token(input_ids, inference_params, cfg_scale, allow_cudagraphs=cg)
 
             next_token = sample_from_logits(logits, generated_tokens=delayed_codes[..., :offset], **sampling_params)
             eos_in_cb0 = next_token[:, 0] == self.eos_token_id
