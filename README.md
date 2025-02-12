@@ -136,8 +136,8 @@ cd Zonos
 docker compose up
 
 # Or for development you can do
-docker build -t Zonos .
-docker run -it --gpus=all --net=host -v /path/to/Zonos:/Zonos -t Zonos
+docker build -t zonos .
+docker run -it --gpus=all --net=host -v /path/to/Zonos:/Zonos -t zonos
 cd /Zonos
 python sample.py # this will generate a sample.wav in /Zonos
 ```
