@@ -5,16 +5,16 @@ import safetensors
 import torch
 import torch.nn as nn
 from huggingface_hub import hf_hub_download
-from mamba_ssm.utils.generation import InferenceParams
 from tqdm import tqdm
 
 from zonos.autoencoder import DACAutoencoder
 from zonos.backbone import ZonosBackbone
 from zonos.codebook_pattern import apply_delay_pattern, revert_delay_pattern
 from zonos.conditioning import PrefixConditioner
-from zonos.config import ZonosConfig
+from zonos.config import InferenceParams, ZonosConfig
 from zonos.sampling import sample_from_logits
 from zonos.speaker_cloning import SpeakerEmbeddingLDA
+from zonos.utils import DEFAULT_DEVICE
 
 
 class Zonos(nn.Module):
@@ -41,14 +41,18 @@ class Zonos(nn.Module):
         self._cg_inference_params = None
         self._cg_scale = None
 
+    @property
+    def device(self) -> torch.device:
+        return next(self.parameters()).device
+
     @classmethod
-    def from_pretrained(cls, repo_id: str, revision: str | None = None, device: str = "cuda") -> "Zonos":
+    def from_pretrained(cls, repo_id: str, revision: str | None = None, device: str = DEFAULT_DEVICE) -> "Zonos":
         config_path = hf_hub_download(repo_id=repo_id, filename="config.json", revision=revision)
         model_path = hf_hub_download(repo_id=repo_id, filename="model.safetensors", revision=revision)
         return cls.from_local(config_path, model_path, device)
 
     @classmethod
-    def from_local(cls, config_path: str, model_path: str, device: str = "cuda") -> "Zonos":
+    def from_local(cls, config_path: str, model_path: str, device: str = DEFAULT_DEVICE) -> "Zonos":
         config = ZonosConfig.from_dict(json.load(open(config_path)))
         model = cls(config).to(device, torch.bfloat16)
         model.autoencoder.dac.to(device)
@@ -109,6 +113,11 @@ class Zonos(nn.Module):
 
         bsz = input_ids.size(0)
 
+        if input_ids.device.type != "cuda":
+            hidden_states_local = self.embed_codes(input_ids)
+            hidden_states_local = hidden_states_local.repeat(2, 1, 1)
+            return self._compute_logits(hidden_states_local, inference_params, cfg_scale)
+
         need_capture = (self._cg_graph is None) or (self._cg_batch_size != bsz)
 
         if need_capture:
@@ -163,11 +172,8 @@ class Zonos(nn.Module):
         return self._compute_logits(hidden_states, inference_params, cfg_scale)
 
     def setup_cache(self, batch_size: int, max_seqlen: int, dtype: torch.dtype = torch.bfloat16) -> InferenceParams:
-        key_value_memory_dict = {
-            i: layer.allocate_inference_cache(batch_size, max_seqlen, dtype=dtype)
-            for i, layer in enumerate(self.backbone.layers)
-        }
-        lengths_per_sample = torch.full((batch_size,), 0, dtype=torch.int32, device="cuda")
+        key_value_memory_dict = self.backbone.allocate_inference_cache(batch_size, max_seqlen, dtype=dtype)
+        lengths_per_sample = torch.full((batch_size,), 0, dtype=torch.int32)
         return InferenceParams(max_seqlen, batch_size, 0, 0, key_value_memory_dict, lengths_per_sample)
 
     def prepare_conditioning(self, cond_dict: dict, uncond_dict: dict | None = None) -> torch.Tensor:
@@ -194,14 +200,16 @@ class Zonos(nn.Module):
     ):
         assert cfg_scale != 1, "TODO: add support for cfg_scale=1"
         prefix_audio_len = 0 if audio_prefix_codes is None else audio_prefix_codes.shape[2]
+        device = self.device
 
         unknown_token = -1
         audio_seq_len = prefix_audio_len + max_new_tokens
-        seq_len = prefix_conditioning.shape[1] + audio_seq_len
+        seq_len = prefix_conditioning.shape[1] + audio_seq_len + 9
 
-        inference_params = self.setup_cache(batch_size=batch_size * 2, max_seqlen=seq_len)
+        with torch.device(device):
+            inference_params = self.setup_cache(batch_size=batch_size * 2, max_seqlen=seq_len)
+            codes = torch.full((batch_size, 9, audio_seq_len), unknown_token)
 
-        codes = torch.full((batch_size, 9, audio_seq_len), unknown_token, device="cuda")
         if audio_prefix_codes is not None:
             codes[..., :prefix_audio_len] = audio_prefix_codes
 
@@ -223,9 +231,9 @@ class Zonos(nn.Module):
         logit_bias = torch.zeros_like(logits)
         logit_bias[:, 1:, self.eos_token_id] = -torch.inf  # only allow codebook 0 to predict EOS
 
-        stopping = torch.zeros(batch_size, dtype=torch.bool, device="cuda")
+        stopping = torch.zeros(batch_size, dtype=torch.bool, device=device)
         max_steps = delayed_codes.shape[2] - offset
-        remaining_steps = torch.full((batch_size,), max_steps, device="cuda")
+        remaining_steps = torch.full((batch_size,), max_steps, device=device)
         progress = tqdm(total=max_steps, desc="Generating", disable=not progress_bar)
 
         step = 0

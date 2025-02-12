@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 
 from zonos.config import PrefixConditionerConfig
+from zonos.utils import DEFAULT_DEVICE
 
 
 class Conditioner(nn.Module):
@@ -334,7 +335,7 @@ def make_cond_dict(
     dnsmos_ovrl: float = 4.0,
     speaker_noised: bool = False,
     unconditional_keys: Iterable[str] = {"vqscore_8", "dnsmos_ovrl"},
-    device: str = "cuda",
+    device: torch.device | str = DEFAULT_DEVICE,
 ) -> dict:
     """
     A helper to build the 'cond_dict' that the model expects.
