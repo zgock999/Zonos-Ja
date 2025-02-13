@@ -14,7 +14,7 @@ from zonos.conditioning import PrefixConditioner
 from zonos.config import InferenceParams, ZonosConfig
 from zonos.sampling import sample_from_logits
 from zonos.speaker_cloning import SpeakerEmbeddingLDA
-from zonos.utils import DEFAULT_DEVICE, pad_weight_
+from zonos.utils import DEFAULT_DEVICE, find_multiple, pad_weight_
 
 DEFAULT_BACKBONE_CLS = next(iter(BACKBONES.values()))
 
@@ -60,14 +60,23 @@ class Zonos(nn.Module):
     ) -> "Zonos":
         config_path = hf_hub_download(repo_id=repo_id, filename="config.json", revision=revision)
         model_path = hf_hub_download(repo_id=repo_id, filename="model.safetensors", revision=revision)
-        return cls.from_local(config_path, model_path, device)
+        return cls.from_local(config_path, model_path, device, **kwargs)
 
     @classmethod
     def from_local(
         cls, config_path: str, model_path: str, device: str = DEFAULT_DEVICE, backbone: str | None = None
     ) -> "Zonos":
         config = ZonosConfig.from_dict(json.load(open(config_path)))
-        backbone_cls = BACKBONES[backbone] if backbone else DEFAULT_BACKBONE_CLS
+        if backbone:
+            backbone_cls = BACKBONES[backbone]
+        else:
+            is_transformer = not bool(config.backbone.ssm_cfg)
+            backbone_cls = DEFAULT_BACKBONE_CLS
+            # Preferentially route to pure torch backbone for increased performance and lower latency.
+            if is_transformer and "torch" in BACKBONES:
+                backbone_cls = BACKBONES["torch"]
+
+        print(f"Using backbone class {backbone_cls.__name__}")
         model = cls(config, backbone_cls).to(device, torch.bfloat16)
         model.autoencoder.dac.to(device)
 
@@ -188,6 +197,7 @@ class Zonos(nn.Module):
         return self._compute_logits(hidden_states, inference_params, cfg_scale)
 
     def setup_cache(self, batch_size: int, max_seqlen: int, dtype: torch.dtype = torch.bfloat16) -> InferenceParams:
+        max_seqlen = find_multiple(max_seqlen, 8)
         key_value_memory_dict = self.backbone.allocate_inference_cache(batch_size, max_seqlen, dtype=dtype)
         lengths_per_sample = torch.full((batch_size,), 0, dtype=torch.int32)
         return InferenceParams(max_seqlen, batch_size, 0, 0, key_value_memory_dict, lengths_per_sample)
@@ -216,6 +226,7 @@ class Zonos(nn.Module):
         batch_size: int = 1,
         sampling_params: dict = dict(min_p=0.1),
         progress_bar: bool = True,
+        disable_torch_compile: bool = False,
         callback: Callable[[torch.Tensor, int, int], bool] | None = None,
     ):
         assert cfg_scale != 1, "TODO: add support for cfg_scale=1"
@@ -225,7 +236,7 @@ class Zonos(nn.Module):
         # Use CUDA Graphs if supported, and torch.compile otherwise.
         cg = self.can_use_cudagraphs()
         decode_one_token = self._decode_one_token
-        decode_one_token = torch.compile(decode_one_token, dynamic=True, disable=cg)
+        decode_one_token = torch.compile(decode_one_token, dynamic=True, disable=cg or disable_torch_compile)
 
         unknown_token = -1
         audio_seq_len = prefix_audio_len + max_new_tokens

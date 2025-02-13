@@ -3,12 +3,9 @@ import torchaudio
 import gradio as gr
 from os import getenv
 
-from zonos.model import Zonos
+from zonos.model import Zonos, DEFAULT_BACKBONE_CLS as ZonosBackbone
 from zonos.conditioning import make_cond_dict, supported_language_codes
 from zonos.utils import DEFAULT_DEVICE as device
-from zonos.backbone import BACKBONES
-
-ZonosBackbone = next(iter(BACKBONES.values()))
 
 CURRENT_MODEL_TYPE = None
 CURRENT_MODEL = None
@@ -139,7 +136,7 @@ def generate_audio(
     if prefix_audio is not None:
         wav_prefix, sr_prefix = torchaudio.load(prefix_audio)
         wav_prefix = wav_prefix.mean(0, keepdim=True)
-        wav_prefix = torchaudio.functional.resample(wav_prefix, sr_prefix, selected_model.autoencoder.sampling_rate)
+        wav_prefix = selected_model.autoencoder.preprocess(wav_prefix, sr_prefix)
         wav_prefix = wav_prefix.to(device, dtype=torch.float32)
         audio_prefix_codes = selected_model.autoencoder.encode(wav_prefix.unsqueeze(0))
 

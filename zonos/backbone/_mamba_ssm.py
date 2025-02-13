@@ -4,7 +4,6 @@ from mamba_ssm.models.mixer_seq_simple import create_block
 from mamba_ssm.ops.triton.layer_norm import layer_norm_fn
 
 from zonos.config import BackboneConfig, InferenceParams
-from zonos.utils import find_multiple
 
 
 class MambaSSMZonosBackbone(nn.Module):
@@ -37,7 +36,6 @@ class MambaSSMZonosBackbone(nn.Module):
         self.norm_f = nn.LayerNorm(config.d_model, eps=config.norm_epsilon)
 
     def allocate_inference_cache(self, batch_size: int, max_seqlen: int, dtype: torch.dtype = torch.bfloat16):
-        max_seqlen = find_multiple(max_seqlen, 8)
         return {
             i: layer.allocate_inference_cache(batch_size, max_seqlen, dtype=dtype)
             for i, layer in enumerate(self.layers)
