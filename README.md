@@ -8,6 +8,12 @@
             object-position: center top;">
 </div>
 
+<div align="center">
+  <a href="https://discord.gg/gTW9JwST8q" target="_blank">
+    <img src="https://img.shields.io/badge/Join%20Our%20Discord-7289DA?style=for-the-badge&logo=discord&logoColor=white" alt="Discord">
+  </a>
+</div>
+
 ---
 
 Zonos-v0.1 is a leading open-weight text-to-speech model trained on more than 200k hours of varied multilingual speech, delivering expressiveness and quality on par with—or even surpassing—top TTS providers.
