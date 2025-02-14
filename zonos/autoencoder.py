@@ -23,5 +23,5 @@ class DACAutoencoder:
         return self.dac.encode(wav).audio_codes
 
     def decode(self, codes: torch.Tensor) -> torch.Tensor:
-        with torch.autocast(self.dac.device.type, torch.float16):
+        with torch.autocast(self.dac.device.type, torch.float16, enabled=self.dac.device.type != "cpu"):
             return self.dac.decode(audio_codes=codes).audio_values.unsqueeze(1).float()
