@@ -10,6 +10,9 @@ device = "cuda"
 CURRENT_MODEL_TYPE = None
 CURRENT_MODEL = None
 
+SPEAKER_EMBEDDING = None
+SPEAKER_AUDIO_PATH = None
+
 
 def load_model_if_needed(model_choice: str):
     global CURRENT_MODEL_TYPE, CURRENT_MODEL
@@ -122,15 +125,20 @@ def generate_audio(
     seed = int(seed)
     max_new_tokens = 86 * 30
 
+    # This is a bit ew, but works for now.
+    global SPEAKER_AUDIO_PATH, SPEAKER_EMBEDDING
+
     if randomize_seed:
         seed = torch.randint(0, 2**32 - 1, (1,)).item()
     torch.manual_seed(seed)
 
-    speaker_embedding = None
     if speaker_audio is not None and "speaker" not in unconditional_keys:
-        wav, sr = torchaudio.load(speaker_audio)
-        speaker_embedding = selected_model.make_speaker_embedding(wav, sr)
-        speaker_embedding = speaker_embedding.to(device, dtype=torch.bfloat16)
+        if speaker_audio != SPEAKER_AUDIO_PATH:
+            print("Recomputed speaker embedding")
+            wav, sr = torchaudio.load(speaker_audio)
+            SPEAKER_EMBEDDING = selected_model.make_speaker_embedding(wav, sr)
+            SPEAKER_EMBEDDING = SPEAKER_EMBEDDING.to(device, dtype=torch.bfloat16)
+            SPEAKER_AUDIO_PATH = speaker_audio
 
     audio_prefix_codes = None
     if prefix_audio is not None:
@@ -149,7 +157,7 @@ def generate_audio(
     cond_dict = make_cond_dict(
         text=text,
         language=language,
-        speaker=speaker_embedding,
+        speaker=SPEAKER_EMBEDDING,
         emotion=emotion_tensor,
         vqscore_8=vq_tensor,
         fmax=fmax,
