@@ -76,7 +76,6 @@ class Zonos(nn.Module):
             if is_transformer and "torch" in BACKBONES:
                 backbone_cls = BACKBONES["torch"]
 
-        print(f"Using backbone class {backbone_cls.__name__}")
         model = cls(config, backbone_cls).to(device, torch.bfloat16)
         model.autoencoder.dac.to(device)
 
@@ -278,6 +277,7 @@ class Zonos(nn.Module):
             offset += 1
             input_ids = delayed_codes[..., offset - 1 : offset]
             logits = decode_one_token(input_ids, inference_params, cfg_scale, allow_cudagraphs=cg)
+            logits += logit_bias
 
             next_token = sample_from_logits(logits, generated_tokens=delayed_codes[..., :offset], **sampling_params)
             eos_in_cb0 = next_token[:, 0] == self.eos_token_id
