@@ -22,7 +22,7 @@ Our model enables highly natural speech generation from text prompts when given 
 
 ##### For more details and speech samples, check out our blog [here](https://www.zyphra.com/post/beta-release-of-zonos-v0-1)
 
-##### We also have a hosted version available at [maia.zyphra.com/audio](https://maia.zyphra.com/audio)
+##### We also have a hosted version available at [playground.zyphra.com/audio](https://playground.zyphra.com/audio)
 
 ---
 
