@@ -255,6 +255,13 @@ def build_interface():
                 seed_number = gr.Number(label="Seed", value=420, precision=0)
                 randomize_seed_toggle = gr.Checkbox(label="Randomize Seed (before generation)", value=True)
 
+        with gr.Accordion("Unified Sampler", open=False):
+            gr.Markdown("###NovelAi's unified sampler")
+            with gr.Row():
+                linear_slider = gr.Slider(0.0, 1.0, 1.0, 0.05, label="Linear")
+                confidence_slider = gr.Slider(0.0, 1.0, 0.05, 0.05, label="Confidence")
+                quadratic_slider = gr.Slider(0.0, 1.0, 0.05, 0.05, label="Quadratic")
+
         with gr.Accordion("Advanced Parameters", open=False):
             gr.Markdown(
                 "### Unconditional Toggles\n"
@@ -375,6 +382,9 @@ def build_interface():
                 speaker_noised_checkbox,
                 cfg_scale_slider,
                 min_p_slider,
+                linear_slider,
+                confidence_slider,
+                quadratic_slider,
                 seed_number,
                 randomize_seed_toggle,
                 unconditional_keys,
