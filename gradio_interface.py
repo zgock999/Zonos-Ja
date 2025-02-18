@@ -104,6 +104,9 @@ def generate_audio(
     speaker_noised,
     cfg_scale,
     min_p,
+    linear,
+    confidence,
+    quadratic,
     seed,
     randomize_seed,
     unconditional_keys,
@@ -122,6 +125,9 @@ def generate_audio(
     dnsmos_ovrl = float(dnsmos_ovrl)
     cfg_scale = float(cfg_scale)
     min_p = float(min_p)
+    linear = float(linear)
+    confidence = float(confidence)
+    quadratic = float(quadratic)
     seed = int(seed)
     max_new_tokens = 86 * 30
 
@@ -182,7 +188,7 @@ def generate_audio(
         max_new_tokens=max_new_tokens,
         cfg_scale=cfg_scale,
         batch_size=1,
-        sampling_params=dict(min_p=min_p),
+        sampling_params=dict(min_p=min_p, linear=linear, conf=confidence, quad=quadratic),
         callback=update_progress,
     )
 
@@ -254,6 +260,14 @@ def build_interface():
                 min_p_slider = gr.Slider(0.0, 1.0, 0.15, 0.01, label="Min P")
                 seed_number = gr.Number(label="Seed", value=420, precision=0)
                 randomize_seed_toggle = gr.Checkbox(label="Randomize Seed (before generation)", value=True)
+
+        with gr.Accordion("Unified Sampler", open=False):
+            gr.Markdown("### NovelAi's unified sampler")
+            with gr.Row():
+                linear_slider = gr.Slider(-2.0, 2.0, 0.5, 0.01, label="Linear")
+                #Conf's theoretical range is between -2 * Quad and 0.
+                confidence_slider = gr.Slider(-2.0, 2.0, 0.40, 0.01, label="Confidence")
+                quadratic_slider = gr.Slider(-2.0, 2.0, 0.00, 0.01, label="Quadratic")
 
         with gr.Accordion("Advanced Parameters", open=False):
             gr.Markdown(
@@ -375,6 +389,9 @@ def build_interface():
                 speaker_noised_checkbox,
                 cfg_scale_slider,
                 min_p_slider,
+                linear_slider,
+                confidence_slider,
+                quadratic_slider,
                 seed_number,
                 randomize_seed_toggle,
                 unconditional_keys,

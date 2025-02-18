@@ -26,6 +26,22 @@ def multinomial(input: torch.Tensor, num_samples: int, replacement=False, *, gen
     return output
 
 
+def apply_unified(probs: torch.Tensor, linear: float, conf: float, quad: float) -> torch.Tensor:
+    """Sample next token using unified sampling approach that combines linear scaling, confidence, and quadratic terms.
+    
+    Args:
+        probs (torch.Tensor): Input probabilities with token candidates on the last dimension.
+        linear (float): Linear scaling factor applied to log probabilities.
+        conf (float): Confidence factor that scales the entropy term.
+        quad (float): Quadratic penalty factor applied to squared log probabilities.
+    Returns:
+        torch.Tensor: Modified probability distribution after applying unified sampling.
+    """
+    logprobs = torch.log(probs.clamp_min(1e-20))
+    entropy = -torch.sum(probs * logprobs, dim=-1, keepdim=True)
+    raw = logprobs * (linear + entropy * conf) - logprobs**2 * quad
+    return raw.softmax(dim=-1)
+
 def apply_top_k(
     probs: torch.Tensor,
     k: int,
@@ -104,6 +120,9 @@ def sample_from_logits(
     top_p: float = 0.0,
     top_k: int = 0,
     min_p: float = 0.0,
+    linear: float = 0.0,
+    conf: float = 0.0,
+    quad: float = 0.0,
     generated_tokens: torch.Tensor | None = None,
     repetition_penalty: float = 3.0,
     repetition_penalty_window: int = 2,
@@ -126,7 +145,8 @@ def sample_from_logits(
 
     if temperature > 0:
         probs = torch.softmax(logits / temperature, dim=-1)
-
+        if linear > 0.0:
+            probs = apply_unified(probs, linear, conf, quad)
         if top_p > 0:
             probs = apply_top_p(probs, top_p)
         if top_k > 0:
