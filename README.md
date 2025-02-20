@@ -1,3 +1,10 @@
+# Zonos-Ja
+
+Zonosに日本語対応のパッチを当てて、ついでにfp16演算に対応したforkです
+
+- Zonosのbackendとして動いているespeak-ngの日本語実装が不完全なせいで音声生成に失敗する不具合回避のための雑な前処理を入れています
+- コンソールサンプルとgradioサンプルに--fp16オプションをつけました。RTX20xx系でも動くはずです(Quadro RTX 5000で確認)
+
 # Zonos-v0.1
 
 <div align="center">
