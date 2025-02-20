@@ -167,11 +167,100 @@ def tokenize_phonemes(phonemes: list[str]) -> tuple[torch.Tensor, list[int]]:
     phoneme_ids = [[PAD_ID] * (longest - len(ids)) + ids for ids in phoneme_ids]
     return torch.tensor(phoneme_ids), lengths
 
+def replace_katakana(text: str) -> str:
+    dict= {
+        "トゥー": "ツー",
+        "ドゥー": "ヅー",
+        "ホー": "ホオ",
+        "イェ": "イエ",
+        "ウァ": "ウア",
+        "ウィ": "ウイ",
+        "ウゥ": "ウウ",
+        "ウェ": "ウエ",
+        "ウォ": "ウオ",
+        "キェ": "キエ",
+        "ギェ": "ギエ",
+        "クァ": "クア",
+        "クィ": "クイ",
+        "クゥ": "ク",
+        "クェ": "クエ",
+        "クォ": "クオ",
+        "シァ": "シア",
+        "シィ": "シイ",
+        "シゥ": "シウ",
+        "シェ": "セ",
+        "ジェ": "ゼ",
+        "シォ": "シオ",
+        "スァ": "スア",
+        "スィ": "スイ",
+        "スゥ": "スウ",
+        "スェ": "スエ",
+        "スォ": "スオ",
+        "ツァ": "ツア",
+        "ツィ": "ツイ",
+        "ツゥ": "ツー",
+        "ツェ": "ツエ",
+        "ツォ": "ツオ",
+        "ティ": "チ",
+        "ディ": "ヂ",
+        "テュ": "チュ",
+        "デュ": "ヂュ",
+        "トゥ": "ツー",
+        "ドゥ": "ヅー",
+        "ニェ": "ニエ",
+        "ヒ ェ": "ヒエ",
+        "ビ ェ": "ビエ",
+        "ピ ェ": "ピエ",
+        "ヒ ぇ": "ヒエ",
+        "ビ ぇ": "ビエ",
+        "ピ ぇ": "ピエ",
+        "ファ": "ハ",
+        "ファ": "ハ",
+        "フィ": "ヒ",
+        "フゥ": "フー",
+        "フェ": "ヘ",
+        "フォ": "ホ",
+        "ミェ": "ミエ",
+        "ムァ": "ムア",
+        "ムィ": "ムイ",
+        "ムゥ": "ムウ",
+        "ムェ": "ムエ",
+        "ムォ": "ムオ",
+        "ヴァ": "バ",
+        "ヴィ": "ビ",
+        "ヴゥ": "ブー",
+        "ヴェ": "ベ",
+        "ヴォ": "ボ",
+        "ヴ": "ブ",
+        "・": "",
+        " ー": "ー",
+        "ぁ": "ア",
+        "ぃ": "イ",
+        "ぅ": "ウ",
+        "ぇ": "エ",
+        "ぉ": "オ",
+        "ァ": "ア",
+        "ィ": "イ",
+        "ゥ": "ウ",
+        "ェ": "エ",
+        "ォ": "オ",
+    }
+    # 正規表現のパターンを作成（キーを正規表現でエスケープ）
+    pattern = "|".join(map(re.escape, dict.keys()))
+
+    # 置換関数
+    def replacer(match):
+        return dict[match.group(0)]
+
+    # 置換処理
+    return re.sub(pattern, replacer, text)
 
 def normalize_jp_text(text: str, tokenizer=Dictionary(dict="full").create()) -> str:
     text = unicodedata.normalize("NFKC", text)
     text = re.sub(r"\d+", lambda m: number2kanji(int(m[0])), text)
     final_text = " ".join([x.reading_form() for x in tokenizer.tokenize(text, SplitMode.A)])
+    final_text = replace_katakana(final_text)
+    print("jp_text:" + final_text)
     return final_text
 
 
@@ -183,6 +272,7 @@ def clean(texts: list[str], languages: list[str]) -> list[str]:
         else:
             text = normalize_numbers(text)
         texts_out.append(text)
+    print("out:" + " ".join(texts_out))
     return texts_out
 
 
@@ -191,17 +281,31 @@ def get_backend(language: str) -> "EspeakBackend":
     import logging
 
     from phonemizer.backend import EspeakBackend
-
     logger = logging.getLogger("phonemizer")
-    backend = EspeakBackend(
-        language,
-        preserve_punctuation=True,
-        with_stress=True,
-        punctuation_marks=_punctuation,
-        logger=logger,
-    )
+    if language == "ja":
+        backend = EspeakBackend(
+            language,
+            preserve_punctuation=True,
+            with_stress=True,
+            punctuation_marks=_punctuation,
+            logger=logger,
+        )
+    else:
+        backend = EspeakBackend(
+            language,
+            preserve_punctuation=True,
+            with_stress=True,
+            punctuation_marks=_punctuation,
+            logger=logger,
+        )
     logger.setLevel(logging.ERROR)
     return backend
+
+def replace_with_custom(text, custom_dict):
+    for word, phoneme in custom_dict.items():
+        text = re.sub(r"\b" + word + r"\b", phoneme, text, flags=re.IGNORECASE)
+    return text
+
 
 
 def phonemize(texts: list[str], languages: list[str]) -> list[str]:
@@ -211,8 +315,9 @@ def phonemize(texts: list[str], languages: list[str]) -> list[str]:
     for text, language in zip(texts, languages):
         backend = get_backend(language)
         phonemes = backend.phonemize([text], strip=True)
+        print(phonemes[0])
         batch_phonemes.append(phonemes[0])
-
+    print(" ".join(batch_phonemes))
     return batch_phonemes
 
 

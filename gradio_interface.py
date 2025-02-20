@@ -1,6 +1,7 @@
 import torch
 import torchaudio
 import gradio as gr
+import argparse
 from os import getenv
 
 from zonos.model import Zonos, DEFAULT_BACKBONE_CLS as ZonosBackbone
@@ -14,7 +15,7 @@ SPEAKER_EMBEDDING = None
 SPEAKER_AUDIO_PATH = None
 
 
-def load_model_if_needed(model_choice: str):
+def load_model_if_needed(model_choice: str, use_fp16: bool = False):
     global CURRENT_MODEL_TYPE, CURRENT_MODEL
     if CURRENT_MODEL_TYPE != model_choice:
         if CURRENT_MODEL is not None:
@@ -22,6 +23,8 @@ def load_model_if_needed(model_choice: str):
             torch.cuda.empty_cache()
         print(f"Loading {model_choice} model...")
         CURRENT_MODEL = Zonos.from_pretrained(model_choice, device=device)
+        if use_fp16:
+            CURRENT_MODEL = CURRENT_MODEL.half()
         CURRENT_MODEL.requires_grad_(False).eval()
         CURRENT_MODEL_TYPE = model_choice
         print(f"{model_choice} model loaded successfully!")
@@ -414,6 +417,23 @@ def build_interface():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--port', type=int, default=7860, help='Port number to run the server on')
+    parser.add_argument('--server', type=str, default="0.0.0.0", help='Server name to bind to')
+    parser.add_argument('--share', action='store_true', help='Enable sharing the app')
+    parser.add_argument('--fp16', action='store_true', help='Use FP16 precision for model')
+    args = parser.parse_args()
+
     demo = build_interface()
-    share = getenv("GRADIO_SHARE", "False").lower() in ("true", "1", "t")
-    demo.launch(server_name="0.0.0.0", server_port=7860, share=share)
+    share = getenv("GRADIO_SHARE", "False").lower() in ("true", "1", "t") or args.share
+    
+    def custom_model_loader(model_choice):
+        return load_model_if_needed(model_choice, use_fp16=args.fp16)
+    
+    global load_model_if_needed
+    original_loader = load_model_if_needed
+    load_model_if_needed = custom_model_loader
+
+    demo.launch(server_name=args.server, server_port=args.port, share=share)
+
+    load_model_if_needed = original_loader
