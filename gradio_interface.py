@@ -8,11 +8,12 @@ from zonos.model import Zonos, DEFAULT_BACKBONE_CLS as ZonosBackbone
 from zonos.conditioning import make_cond_dict, supported_language_codes
 from zonos.utils import DEFAULT_DEVICE as device
 
+# グローバル変数定義
 CURRENT_MODEL_TYPE = None
 CURRENT_MODEL = None
-
 SPEAKER_EMBEDDING = None
 SPEAKER_AUDIO_PATH = None
+USE_FP16 = False
 
 
 def load_model_if_needed(model_choice: str, use_fp16: bool = False):
@@ -24,7 +25,13 @@ def load_model_if_needed(model_choice: str, use_fp16: bool = False):
         print(f"Loading {model_choice} model...")
         CURRENT_MODEL = Zonos.from_pretrained(model_choice, device=device)
         if use_fp16:
-            CURRENT_MODEL = CURRENT_MODEL.half()
+            print("Converting model to float16...")
+            CURRENT_MODEL = CURRENT_MODEL.half()  # float16に変換
+            for param in CURRENT_MODEL.parameters():
+                param.data = param.data.half()
+            for buf in CURRENT_MODEL.buffers():
+                if buf.dtype.is_floating_point:  # 浮動小数点型の場合のみ変換
+                    buf.data = buf.data.half()
         CURRENT_MODEL.requires_grad_(False).eval()
         CURRENT_MODEL_TYPE = model_choice
         print(f"{model_choice} model loaded successfully!")
@@ -115,13 +122,14 @@ def generate_audio(
     seed,
     randomize_seed,
     unconditional_keys,
+    use_fp16=False,
     progress=gr.Progress(),
 ):
     """
     Generates audio based on the provided UI parameters.
     We do NOT use language_id or ctc_loss even if the model has them.
     """
-    selected_model = load_model_if_needed(model_choice)
+    selected_model = load_model_if_needed(model_choice, use_fp16=use_fp16)
 
     speaker_noised_bool = bool(speaker_noised)
     fmax = float(fmax)
@@ -147,10 +155,14 @@ def generate_audio(
 
     if speaker_audio is not None and "speaker" not in unconditional_keys:
         if speaker_audio != SPEAKER_AUDIO_PATH:
-            print("Recomputed speaker embedding")
+            print("Recomputing speaker embedding")
             wav, sr = torchaudio.load(speaker_audio)
-            SPEAKER_EMBEDDING = selected_model.make_speaker_embedding(wav, sr)
-            SPEAKER_EMBEDDING = SPEAKER_EMBEDDING.to(device, dtype=torch.bfloat16)
+            wav = wav.to(device)
+            if use_fp16:
+                with torch.amp.autocast('cuda', dtype=torch.float16, cache_enabled=False):
+                    SPEAKER_EMBEDDING = selected_model.make_speaker_embedding(wav, sr)
+            else:
+                SPEAKER_EMBEDDING = selected_model.make_speaker_embedding(wav, sr)
             SPEAKER_AUDIO_PATH = speaker_audio
 
     audio_prefix_codes = None
@@ -189,17 +201,32 @@ def generate_audio(
         progress((step, estimated_total_steps))
         return True
 
-    codes = selected_model.generate(
-        prefix_conditioning=conditioning,
-        audio_prefix_codes=audio_prefix_codes,
-        max_new_tokens=max_new_tokens,
-        cfg_scale=cfg_scale,
-        batch_size=1,
-        sampling_params=dict(top_p=top_p, top_k=top_k, min_p=min_p, linear=linear, conf=confidence, quad=quadratic),
-        callback=update_progress,
-    )
+    # Add fp16 support for generation
+    if use_fp16:
+        with torch.amp.autocast('cuda', dtype=torch.float16, cache_enabled=False):
+            codes = selected_model.generate(
+                prefix_conditioning=conditioning,
+                audio_prefix_codes=audio_prefix_codes,
+                max_new_tokens=max_new_tokens,
+                cfg_scale=cfg_scale,
+                batch_size=1,
+                sampling_params=dict(top_p=top_p, top_k=top_k, min_p=min_p, linear=linear, conf=confidence, quad=quadratic),
+                callback=update_progress,
+            )
+            wav_out = selected_model.autoencoder.decode(codes)
+    else:
+        codes = selected_model.generate(
+            prefix_conditioning=conditioning,
+            audio_prefix_codes=audio_prefix_codes,
+            max_new_tokens=max_new_tokens,
+            cfg_scale=cfg_scale,
+            batch_size=1,
+            sampling_params=dict(top_p=top_p, top_k=top_k, min_p=min_p, linear=linear, conf=confidence, quad=quadratic),
+            callback=update_progress,
+        )
+        wav_out = selected_model.autoencoder.decode(codes)
 
-    wav_out = selected_model.autoencoder.decode(codes).cpu().detach()
+    wav_out = wav_out.cpu().detach()
     sr_out = selected_model.autoencoder.sampling_rate
     if wav_out.dim() == 2 and wav_out.size(0) > 1:
         wav_out = wav_out[0:1, :]
@@ -376,9 +403,9 @@ def build_interface():
             ],
         )
 
-        # Generate audio on button click
+        # Generate audio on button click with fp16 support
         generate_button.click(
-            fn=generate_audio,
+            fn=lambda *args: generate_audio(*args, use_fp16=USE_FP16),
             inputs=[
                 model_choice,
                 text,
@@ -418,22 +445,29 @@ def build_interface():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--port', type=int, default=7860, help='Port number to run the server on')
-    parser.add_argument('--server', type=str, default="0.0.0.0", help='Server name to bind to')
+    parser.add_argument('--port', type=int, help='Port number to run the server on (overrides GRADIO_PORT)')
+    parser.add_argument('--server', type=str, help='Server name to bind to (overrides GRADIO_SERVER)')
     parser.add_argument('--share', action='store_true', help='Enable sharing the app')
-    parser.add_argument('--fp16', action='store_true', help='Use FP16 precision for model')
+    parser.add_argument('--fp16', action='store_true', help='Use FP16 precision for model (overrides ZONOS_FP16)')
     args = parser.parse_args()
 
     demo = build_interface()
+    
+    # ポート番号の決定（優先順位: --port > GRADIO_PORT > デフォルト7860）
+    port = args.port
+    if port is None:
+        port = int(getenv("GRADIO_PORT", "7860"))
+    
+    # サーバー名の決定（優先順位: --server > GRADIO_SERVER > デフォルト0.0.0.0）
+    server = args.server
+    if server is None:
+        server = getenv("GRADIO_SERVER", "0.0.0.0")
+    
+    # fp16設定の決定（優先順位: --fp16 > ZONOS_FP16）
+    USE_FP16 = args.fp16 or getenv("ZONOS_FP16", "").lower() in ("true", "1", "t")
+    if USE_FP16:
+        print("FP16 mode enabled")
+    
     share = getenv("GRADIO_SHARE", "False").lower() in ("true", "1", "t") or args.share
-    
-    def custom_model_loader(model_choice):
-        return load_model_if_needed(model_choice, use_fp16=args.fp16)
-    
-    global load_model_if_needed
-    original_loader = load_model_if_needed
-    load_model_if_needed = custom_model_loader
 
-    demo.launch(server_name=args.server, server_port=args.port, share=share)
-
-    load_model_if_needed = original_loader
+    demo.launch(server_name=server, server_port=port, share=share)
